@@ -99,10 +99,20 @@ Download this repository (green **Code** button → *Download ZIP*) and copy the
 
 *Not sure where it is? Look for the folder that contains `PrusaSlicer.ini`. Copy the folder, don't link it.*
 
+<div align="center">
+<img src="docs/images/install-folder.svg" alt="Folder tree: PrusaSlicer3-dev, lua, then the plugin folder com.community.pla-lw-temp-test with its three files" width="800">
+</div>
+
 ### 3. Print the tower
 1. Select your printer and the standard **Prusament PLA** profile.
 2. Click **Plugins → Calibration → PLA Lightweight Temp Test**, then **Run**. Keep the defaults for your first try.
 3. Slice and print. It takes about an hour.
+
+**What you should see in the preview** (this is the plugin's default, running in PrusaSlicer 3 on a CORE One):
+
+<div align="center">
+<img src="docs/images/slicer-preview-annotated.png" alt="PrusaSlicer 3 preview of the default tower: seven bands from 210 to 240 degrees with engraved temperature and multiplier labels and a groove at every band boundary" width="620">
+</div>
 
 > [!IMPORTANT]
 > The plugin changes your *active* settings for the test (temperatures, fan, speed, retraction). **Do not save the
@@ -133,6 +143,10 @@ Open this repository in [Claude Code](https://claude.com/claude-code) and ask, i
 
 Claude finds your printer's Prusament PLA profile, builds the new one, **checks it against the real slicer**, and
 asks before installing it. Restart PrusaSlicer 3 and pick the new filament.
+
+<div align="center">
+<img src="docs/images/claude-chat.svg" alt="Example conversation: you ask for a 230 degree / 0.43 profile, Claude checks the range, builds the profile, verifies it in the slicer and asks before installing" width="800">
+</div>
 
 The new profile already handles temperature, flow, fan, retraction and speed (about **50 mm/s**). The one thing a
 filament profile cannot hold is **"Avoid crossing perimeters"** (maximum detour 40 mm, Prusa's tip against stringing).
@@ -195,7 +209,7 @@ retraction off. The full table and a pre-print checklist are in the
 
 <div align="center">
 <img src="docs/images/tower-annotated.png" alt="The wide 205-250 °C tower in PrusaSlicer 3: ten bands, each labelled with temperature and extrusion multiplier" width="520"><br>
-<em>The wide 205-250 °C test in the PrusaSlicer 3 preview (first version of the labels).</em>
+<em>The optional <b>Wide test</b> (205-250 °C, 10 bands) in the PrusaSlicer 3 preview, shown with the first version of the labels.</em>
 </div>
 
 </details>

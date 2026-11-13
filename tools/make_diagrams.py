@@ -152,10 +152,63 @@ def ruler():
     write("temperature-ruler.svg", o)
 
 
+def install_folder():
+    """Where the plugin folder goes: a beginner-proof folder tree."""
+    W, H = 900, 330
+    o = card(W, H, "Where to put the plugin folder")
+    o.append(T(W / 2, 38, "Copy the plugin folder into PrusaSlicer 3's lua folder", 20, INK, "middle", "700"))
+    rows = [(0, "PrusaSlicer3-dev", "folder", "PrusaSlicer 3's data folder (it contains PrusaSlicer.ini)"),
+            (1, "lua", "folder", "plugins live here; create it if it is missing"),
+            (2, "com.community.pla-lw-temp-test", "new", "<- copy this folder here (keep its name)"),
+            (3, "manifest.json", "file", ""), (3, "pla_lw_temp_test.lua", "file", ""), (3, "README.md", "file", "")]
+    y0 = 80
+    for i, (lvl, name, kind, note) in enumerate(rows):
+        y = y0 + i * 38
+        x = 60 + lvl * 44
+        fill = {"folder": "#e8f1ff", "new": "#fff4ec", "file": "#f6f8fa"}[kind]
+        stroke = {"folder": BLUE, "new": ORANGE, "file": "#d0d7de"}[kind]
+        wbox = 36 + len(name) * 9.2
+        o.append(f'<rect x="{x}" y="{y - 20}" width="{wbox:.0f}" height="30" rx="6" fill="{fill}" stroke="{stroke}" stroke-width="{2 if kind == "new" else 1}"/>')
+        o.append(T(x + 12, y, ("\U0001F4C1 " if kind != "file" else "\U0001F4C4 ") + name, 15, INK, "start", "700" if kind != "file" else "400"))
+        if note:
+            o.append(T(x + wbox + 14, y, note, 13, ORANGE if kind == "new" else MUTED, "start", "700" if kind == "new" else "400"))
+        if lvl:
+            o.append(f'<path d="M{x - 24},{y - 20 - 18 if False else y - 28} L{x - 24},{y - 5} L{x - 6},{y - 5}" fill="none" stroke="#c0c6cc" stroke-width="1.5"/>')
+    o.append(T(W / 2, H - 22, "Then restart PrusaSlicer 3. Flatpak: ~/.var/app/com.prusa3d.PrusaSlicer/config/PrusaSlicer3-dev/lua/", 12, MUTED, "middle"))
+    write("install-folder.svg", o)
+
+
+def claude_chat():
+    """An illustrative example of asking Claude for the profile (not a transcript)."""
+    W, H = 900, 400
+    o = card(W, H, "Example: asking Claude for a profile")
+    o.append(T(W / 2, 36, "Step 5, as a conversation (an example, not a recording)", 20, INK, "middle", "700"))
+    # user bubble
+    o.append('<rect x="250" y="62" width="620" height="82" rx="14" fill="#e8f1ff"/>')
+    for i, line in enumerate(["Look at this repo and make me a Lightweight PLA filament profile for",
+                              "PrusaSlicer 3 with the 230 °C / 0.43 combo. I have a Prusa CORE One",
+                              "with a 0.4 high-flow nozzle."]):
+        o.append(T(268, 90 + i * 22, line, 14, INK))
+    o.append(T(862, 160, "you", 12, MUTED, "end", "700"))
+    # claude bubble
+    o.append('<rect x="30" y="176" width="640" height="190" rx="14" fill="#fff4ec"/>')
+    steps = ["✓  230 °C is inside the usable range (210-240 °C)",
+             "✓  Found your printer's Prusament PLA profile",
+             "✓  Built the profile: multiplier 0.43, fan 30 %, no Z-hop, pressure advance off",
+             "✓  Checked it in the real slicer: 0 retractions, speed about 49 mm/s",
+             "?  May I install it in PrusaSlicer 3? (then restart it and pick the filament)"]
+    for i, line in enumerate(steps):
+        o.append(T(50, 206 + i * 29, line, 14, INK, "start", "700" if line.startswith("?") else "400"))
+    o.append(T(38, 384, "Claude", 12, ORANGE, "start", "700"))
+    write("claude-chat.svg", o)
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     curve()
     workflow()
     layout()
     ruler()
-    print("wrote 4 diagrams to", OUT)
+    install_folder()
+    claude_chat()
+    print("wrote 6 diagrams to", OUT)
