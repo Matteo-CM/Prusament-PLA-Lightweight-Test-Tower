@@ -3,26 +3,17 @@
 cannot disagree with the code.   python3 tools/make_diagrams.py
 """
 import os
-import re
 
 ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..")
 OUT = os.path.join(ROOT, "docs", "images")
-SRC = open(os.path.join(ROOT, "com.community.pla-lw-temp-test", "pla_lw_temp_test.lua"), encoding="utf-8").read()
+import sys
 
-pts = [(int(a), float(b)) for a, b in re.findall(r"\{(\d+),\s*([\d.]+)\}", re.search(r"local EM_CURVE = (\{.*?\})\n", SRC).group(1))]
-FLOOR = float(re.search(r"local EM_FLOOR = ([\d.]+)", SRC).group(1))
-MIN_T = int(re.search(r"local MIN_TEMP = (\d+)", SRC).group(1))
-MAX_T = int(re.search(r"local MAX_SAFE_TEMP = (\d+)", SRC).group(1))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lwcurve as lw  # noqa: E402
 
-
-def em(t):
-    if t <= pts[0][0]:
-        return pts[0][1]
-    for i in range(1, len(pts)):
-        if t <= pts[i][0]:
-            f = (t - pts[i - 1][0]) / (pts[i][0] - pts[i - 1][0])
-            return pts[i - 1][1] + f * (pts[i][1] - pts[i - 1][1])
-    return max(FLOOR, pts[-1][1] - 0.002 * (t - pts[-1][0]))
+pts, FLOOR = lw.CURVE, lw.EM_FLOOR
+MIN_T, MAX_T = lw.WIDE_MIN, lw.WIDE_MAX
+em = lw.em_at
 
 
 FONT = 'font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif"'
@@ -53,10 +44,14 @@ def curve():
     x = lambda t: L + (t - 203) / (252 - 203) * pw
     y = lambda v: Tp + (1.05 - v) / (1.05 - 0.25) * ph
     o = card(W, H, "Extrusion multiplier versus nozzle temperature for Lightweight PLA")
-    o += [T(W / 2, 34, "Flow has to drop as the filament gets hotter", 20, INK, "middle", "700"),
+    o += [T(W / 2, 34, "Flow has to drop as the filament gets hotter, and only 210-240 °C is usable", 20, INK, "middle", "700"),
           T(W / 2, 56, "Extrusion multiplier per band (1.0 = the standard Prusament PLA profile)", 13, MUTED, "middle")]
-    o.append(f'<rect x="{x(215):.1f}" y="{Tp}" width="{x(235) - x(215):.1f}" height="{ph:.1f}" fill="#fff4ec"/>')
-    o.append(T((x(215) + x(235)) / 2, Tp + ph - 10, "foaming range (Prusa)", 12, ORANGE, "middle", "600"))
+    zones = [(MIN_T - 2, lw.TEMP_OK_MIN, "#e8f1ff", "#0969da", "too cold"),
+             (lw.TEMP_OK_MIN, lw.TEMP_OK_MAX, "#e9f7ee", "#1a7f37", "usable"),
+             (lw.TEMP_OK_MAX, MAX_T + 2, "#ffeceb", "#cf222e", "too hot")]
+    for z0, z1, fill, ink, name in zones:
+        o.append(f'<rect x="{x(z0):.1f}" y="{Tp}" width="{x(z1) - x(z0):.1f}" height="{ph:.1f}" fill="{fill}"/>')
+        o.append(T((x(z0) + x(z1)) / 2, Tp + ph - 10, name, 12, ink, "middle", "700"))
     for v in (0.4, 0.6, 0.8, 1.0):
         o.append(f'<line x1="{L}" y1="{y(v):.1f}" x2="{W - R}" y2="{y(v):.1f}" stroke="{GRID}"/>' + T(L - 10, y(v) + 4, f"{v:.1f}", 12, MUTED, "end"))
     for t in range(MIN_T, MAX_T + 1, 5):

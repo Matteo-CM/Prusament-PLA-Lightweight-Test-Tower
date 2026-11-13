@@ -12,6 +12,11 @@
 --    EM range 1 - 0.35.
 -- EM_CURVE below is piecewise-linear through those published points. Anything
 -- between/after them is interpolation -- the measured wall decides.
+--  * First test print (CORE One 0.4 HF, standard Prusament PLA converted by this
+--    plugin, 205-250 C): 205 C was dense and unfoamed (too cold) and 245-250 C had
+--    a degraded, blurred surface (too hot). Usable range found: 210-240 C. The
+--    plugin therefore defaults to 210-240 C and flags anything outside it.
+--    250 C is a HARD limit (Prusa: toxic fumes above it); the plugin refuses it.
 --
 -- Why this exists: Prusament PLA Lightweight foams in the hot end. Nozzle
 -- temperature sets how much it expands (foaming starts ~215 C, peaks ~235 C), and
@@ -38,9 +43,11 @@ info = {
     title = "PLA Lightweight Temp Test",
     menu = "Calibration/PLA Lightweight Temp Test",
     params = {
-        {name = "min_temp",       label = "Min Temperature  [C]",                  type = "int",   default = 205},
-        {name = "max_temp",       label = "Max Temperature  [C]",                  type = "int",   default = 250},
-        {name = "steps",          label = "Num Steps (205-250 C = 10 x 5 C)",      type = "int",   default = 10},
+        {name = "wide_range",     label = "Wide test 205-250 C (shows too cold AND too hot)", type = "bool", default = false},
+        {name = "custom_range",   label = "Custom range: use Min / Max / Steps below",   type = "bool",  default = false},
+        {name = "min_temp",       label = "Custom Min [C]  (below 210 = too cold, minimum 190)", type = "int", default = 210},
+        {name = "max_temp",       label = "Custom Max [C]  (above 240 = too hot, HARD LIMIT 250: toxic fumes)", type = "int", default = 240},
+        {name = "steps",          label = "Custom Num Steps, 2-10  (Min = Max tests one temperature)", type = "int", default = 7},
         {name = "band_height",    label = "Band Height  [mm]",                     type = "float", default = 8},
         {name = "box_width",      label = "Box Front/Back Width  [mm]",            type = "float", default = 50},
         {name = "box_depth",      label = "Box Side Length  [mm]",                 type = "float", default = 30},
@@ -51,14 +58,19 @@ info = {
         {name = "fan_percent",    label = "Fan Speed  [%]  (0 = keep profile)",    type = "int",   default = 30},
         {name = "retraction_off", label = "Try To Turn Retraction Off",            type = "bool",  default = true},
         {name = "hot_on_top",     label = "Hottest Band On Top",                   type = "bool",  default = true},
-        {name = "labels",         label = "Engrave Labels",                        type = "bool",  default = true},
+        {name = "labels",         label = "Engrave Labels And Band Grooves",       type = "bool",  default = true},
+        {name = "lcd_messages",   label = "Show Band / Warning Messages On The Printer Display (M117)", type = "bool", default = true},
         {name = "clear_gcode",    label = "Clear Existing Custom G-code",          type = "bool",  default = true},
         {name = "no_slowdown",    label = "Disable Layer-time Slowdown (edits filament preset)", type = "bool", default = true}
     }
 }
 
-local MAX_SAFE_TEMP = 250 -- Prusa: do not exceed 250 C with this filament
-local MIN_TEMP = 205          -- requested test range: 205-250 C (datasheet range is 215-250 C)
+local MAX_SAFE_TEMP = 250 -- HARD limit. Prusa: never exceed 250 C with this filament (toxic fumes)
+local MIN_TEMP = 190         -- hard lower limit; below this PLA does not extrude reliably
+local TEMP_OK_MIN = 210      -- usable range found in the first test print: below = too cold, no foaming
+local TEMP_OK_MAX = 240      -- above = too hot: degraded surface (and fumes risk grows towards 250)
+local WIDE_MIN = 205         -- "wide" test shows both failure ends
+local WIDE_MAX = 250
 
 -- Published extrusion-multiplier points {temp C, EM}: datasheet 215 C -> 1.0 and
 -- 235 C -> 0.38; blog 230 C -> 0.45.
@@ -94,14 +106,46 @@ local function num(v, default)
     return v
 end
 
+--- "ok", "cold" or "hot" for a nozzle temperature.
+local function zone_of(t)
+    if t < TEMP_OK_MIN then return "cold" end
+    if t > TEMP_OK_MAX then return "hot" end
+    return "ok"
+end
+
+--- Which temperature range was asked for? Returns min, max, steps, mode.
+local function resolve_range(opts)
+    if opts.custom_range then
+        return math.floor(num(opts.min_temp, TEMP_OK_MIN) + 0.5), math.floor(num(opts.max_temp, TEMP_OK_MAX) + 0.5),
+               clamp(math.floor(num(opts.steps, 7) + 0.5), 2, 10), "custom"
+    elseif opts.wide_range then
+        return WIDE_MIN, WIDE_MAX, 10, "wide"
+    end
+    return TEMP_OK_MIN, TEMP_OK_MAX, 7, "recommended"
+end
+
+--- nil when the request is allowed, otherwise {text = "...", why = "..."}. Plugin errors are only
+-- written to the log (never shown), so a refusal is made visible as a warning plate in the plater.
+function validate_range(opts)
+    local lo, hi = resolve_range(opts)
+    if hi > MAX_SAFE_TEMP or lo > MAX_SAFE_TEMP then
+        return {text = "NO - ABOVE 250 C = TOXIC FUMES", why = "requested " .. fmt_int(math.max(lo, hi)) .. " C; the hard limit is 250 C"}
+    end
+    if lo < MIN_TEMP or hi < MIN_TEMP then
+        return {text = "NO - BELOW 190 C = TOO COLD", why = "requested " .. fmt_int(math.min(lo, hi)) .. " C; the minimum is 190 C"}
+    end
+    return nil
+end
+
 --- Pure planning step (also exercised by tests/). Returns a table:
 --   bands = { {index, temp, flow, z_start, gcode_z}, ... } sorted by ascending z
 --   total_height, layer_height, first_layer_height, error?
 function plan_bands(opts, layer_height, first_layer_height)
-    local min_t = clamp(math.floor(num(opts.min_temp, 205) + 0.5), MIN_TEMP, MAX_SAFE_TEMP)
-    local max_t = clamp(math.floor(num(opts.max_temp, 250) + 0.5), MIN_TEMP, MAX_SAFE_TEMP)
+    local lo, hi, steps = resolve_range(opts)
+    -- Defence in depth: never plan outside the hard limits even if validate_range was skipped.
+    local min_t = clamp(lo, MIN_TEMP, MAX_SAFE_TEMP)
+    local max_t = clamp(hi, MIN_TEMP, MAX_SAFE_TEMP)
     if max_t < min_t then min_t, max_t = max_t, min_t end
-    local steps = clamp(math.floor(num(opts.steps, 10) + 0.5), 2, 10)
     local band_h = clamp(num(opts.band_height, 8), 5, 25)
     local ref_em = clamp(num(opts.ref_em, 1.0), 0.2, 1.5)
     local fan_pct = clamp(math.floor(num(opts.fan_percent, 30) + 0.5), 0, 100)
@@ -118,7 +162,7 @@ function plan_bands(opts, layer_height, first_layer_height)
 
     local bands = {}
     for i = 1, steps do
-        local frac = (i - 1) / (steps - 1)
+        local frac = (i - 1) / math.max(1, steps - 1)
         local t = min_t + (max_t - min_t) * frac
         if not opts.hot_on_top then t = max_t - (max_t - min_t) * frac end
         t = math.floor(t + 0.5)
@@ -132,7 +176,15 @@ function plan_bands(opts, layer_height, first_layer_height)
         -- CORE One PLA 230 -> 225 C), and the two must not race.
         local gz = snap(z_start)
         if i == 1 then gz = snap(first_layer_height + layer_height) end
-        bands[i] = {index = i, temp = t, flow = flow, em = em, z_start = z_start, gcode_z = gz}
+        bands[i] = {index = i, temp = t, flow = flow, em = em, z_start = z_start, gcode_z = gz, zone = zone_of(t)}
+    end
+    local warnings = {}
+    for _, b in ipairs(bands) do
+        if b.zone == "cold" then
+            warnings[#warnings + 1] = fmt_int(b.temp) .. " C is below " .. fmt_int(TEMP_OK_MIN) .. " C: too cold, the filament will not foam"
+        elseif b.zone == "hot" then
+            warnings[#warnings + 1] = fmt_int(b.temp) .. " C is above " .. fmt_int(TEMP_OK_MAX) .. " C: too hot, the surface degrades (never exceed 250 C)"
+        end
     end
     table.sort(bands, function(a, b) return a.gcode_z < b.gcode_z end)
 
@@ -189,6 +241,7 @@ function plan_bands(opts, layer_height, first_layer_height)
     return {
         bands = bands,
         entries = entries,
+        warnings = warnings,
         fan_pwm = pwm,
         perimeters = clamp(math.floor(num(opts.perimeters, 1) + 0.5), 1, 2),
         band_height = band_h,
@@ -200,7 +253,7 @@ end
 
 --- Engraved label (negative volume) on the front face (min Y) of the tab.
 local function front_label(text, center_x, center_z, face_y, size)
-    local depth = 0.6
+    local depth = 0.9 -- deep and large: foamed bands blur shallow, small engraving
     local mesh = api.emboss_text {
         font = api.get_default_font(),
         text = text,
@@ -224,7 +277,28 @@ local function front_label(text, center_x, center_z, face_y, size)
     }
 end
 
+--- A visible refusal: plugin errors are only logged, so show the reason as 3D text in the plater.
+local function refusal_plate(reason)
+    api.project:add_object {
+        mesh = api.emboss_text {
+            font = api.get_default_font(),
+            text = reason.text,
+            depth = 2,
+            line_height = 8
+        },
+        object_params = {fill_density = "100%"}
+    }
+end
+
 function execute(opts)
+    -- Safety first: refuse before touching any preset or G-code.
+    local refusal = validate_range(opts)
+    if refusal then
+        print("PLA-LW temp test REFUSED: " .. refusal.why)
+        refusal_plate(refusal)
+        return
+    end
+
     local bed = api.project:current_bed()
     local print_settings = bed:print_presets()
 
@@ -319,7 +393,7 @@ function execute(opts)
     end
 
     -- Geometry. Primitives start at (0,0,0); bounds() is not used on them.
-    local TAB_W, TAB_T = math.min(30.0, box_w - 4), 3.0
+    local TAB_W, TAB_T = math.min(40.0, box_w - 4), 3.5
     local other_volumes = {}
 
     -- Label tab on the front (-Y side). With perimeters=1 it would otherwise be
@@ -339,14 +413,26 @@ function execute(opts)
 
     for _, band in ipairs(plan.bands) do
         if opts.labels then
-            local text = fmt_int(band.temp) .. " / " .. string.format("%.2f", band.em)
+            local text = fmt_int(band.temp) .. "/" .. string.format("%.2f", band.em)
+            if band.zone == "cold" then text = text .. " COLD" elseif band.zone == "hot" then text = text .. " HOT" end
             table.insert(other_volumes, front_label(
                 text,
                 box_w * 0.5,
                 band.z_start + plan.band_height * 0.5,
                 -TAB_T,
-                math.min(4.5, plan.band_height * 0.45)
+                math.min(4.6, plan.band_height * 0.55)
             ))
+        end
+    end
+    -- Horizontal grooves on the tab at every band boundary, so the band is identifiable even when
+    -- foaming blurs the text.
+    if opts.labels then
+        for i = 1, #plan.bands - 1 do
+            table.insert(other_volumes, {
+                mesh = api.make_cube(TAB_W, 0.8, 0.6),
+                type = VolumeType.Negative,
+                translate = {x = tab_x, y = -TAB_T, z = i * plan.band_height - 0.3}
+            })
         end
     end
 
@@ -356,7 +442,19 @@ function execute(opts)
     for _, e in ipairs(plan.entries) do
         local lines = {}
         if e.temp then
-            lines[#lines + 1] = "M104 S" .. fmt_int(e.temp.temp) .. " ; PLA-LW test band " .. fmt_int(e.temp.index)
+            local band = e.temp
+            lines[#lines + 1] = "M104 S" .. fmt_int(band.temp) .. " ; PLA-LW test band " .. fmt_int(band.index)
+            if band.zone ~= "ok" then
+                lines[#lines + 1] = "; WARNING: " .. fmt_int(band.temp) .. " C is " ..
+                    (band.zone == "cold" and "too cold (no foaming)" or "too hot (degrades the surface)")
+            end
+            if opts.lcd_messages ~= false then
+                local msg
+                if band.zone == "cold" then msg = "COLD " .. fmt_int(band.temp) .. "C no foam"
+                elseif band.zone == "hot" then msg = "HOT " .. fmt_int(band.temp) .. "C degrades"
+                else msg = "LW " .. fmt_int(band.index) .. "/" .. fmt_int(#plan.bands) .. " " .. fmt_int(band.temp) .. "C EM" .. string.format("%.2f", band.em) end
+                lines[#lines + 1] = "M117 " .. msg
+            end
         end
         if e.flow then
             lines[#lines + 1] = "M221 S" .. fmt_int(e.flow.flow) .. " ; flow " .. fmt_int(e.flow.flow) ..
@@ -390,4 +488,5 @@ function execute(opts)
 
     print(string.format("PLA-LW temp test: %d bands, %d-%d C, height %s mm",
         #plan.bands, plan.bands[1].temp, plan.bands[#plan.bands].temp, fmt_int(total_height)))
+    for _, w in ipairs(plan.warnings) do print("PLA-LW WARNING: " .. w) end
 end

@@ -16,11 +16,20 @@ slicer. Do these steps in order and do not skip the verification.
 ### 0. Understand the numbers
 - `240 °C / 0.37` means temperature 240 and **extrusion multiplier 0.37** (a factor, not a percentage; "0.37%" is
   just a typo). `--temp 240 --em 0.37`.
-- If the user gives *measured* wall thickness instead, compute the multiplier with
-  `EM_needed = EM_band × target / measured`. The target is 0.48 mm for 1 perimeter and about 0.9 mm for
-  2 perimeters. Show the arithmetic and use the result.
-- Hard limits: temperature 190 to 250 °C (Prusa: never above 250 °C, fumes), EM 0.2 to 1.2. The tools refuse
-  anything outside. Do not work around that.
+- If the user gives *measured* wall thicknesses instead (e.g. "210 is 0.62, 230 is 0.50"), run the analyzer rather
+  than doing the arithmetic by hand. It reads the multiplier each band was printed with from the plugin's curve:
+  ```bash
+  python3 tools/analyze_results.py 210=0.62 230=0.50 240=0.47 [--perimeters 2] [--pick 230]
+  ```
+  `EM_needed = EM_band × target / measured` (target 0.48 mm for 1 perimeter, 0.9 mm for 2). Report its table
+  honestly, including its warnings (too cold / too hot band, measurement slips, a hotter band needing more flow).
+  The choice of temperature is the user's: tell them to weigh foaming (palest, lightest), stringing and strength.
+- **Safety and range (never skip this).** 250 °C is a hard limit: Prusa says the filament emits toxic fumes above
+  it. Never generate, suggest or help someone print a profile above 250 °C, and never help bypass the plugin's or
+  tools' refusals. The usable range found by the first test print is **210 to 240 °C**: below 210 °C the filament
+  does not foam (too cold), above 240 °C the surface degrades (too hot). If the user asks for a temperature outside
+  210-240 °C, say so plainly, explain why, and suggest the nearest usable band; only continue if they explicitly
+  want it (the generator prints a WARNING). EM must be 0.2 to 1.2. The tools enforce 190-250 °C and 0.2-1.2.
 - If the printer or nozzle is not stated, **ask** (or read it from their slicer: step 2). Never guess.
 
 ### 1. Locate PrusaSlicer 3 and its data folder
@@ -107,15 +116,22 @@ been test-printed unless the user says so.
 | `com.community.pla-lw-temp-test/` | the plugin bundle (`manifest.json`, `pla_lw_temp_test.lua`, README) |
 | `tools/make_profile.py` | preset generator (stdlib only) |
 | `tools/resolve_stock.py` | asks the slicer for resolved values; verifies presets |
+| `tools/analyze_results.py` | caliper readings in, extrusion multiplier per band out; flags bad bands |
+| `tools/lwcurve.py` | the flow curve, limits (190/210/240/250 °C) and zones, read from the plugin source |
 | `tools/make_diagrams.py` | regenerates `docs/images/*.svg` from the plugin's numbers |
-| `tests/` | `luajit tests/plugin_test.lua`; `python3 -I tests/profile_test.py`; `python3 -I tests/resolve_test.py` |
+| `tests/` | `luajit tests/plugin_test.lua`; `python3 -I tests/profile_test.py`; `python3 -I tests/resolve_test.py`; `python3 -I tests/analyze_test.py` |
 
 ## Working on the code
-- Run all three test files after any change. The Lua test uses a mock of the slicer API: it cannot prove the plugin
+- Run all four test files after any change. The Lua test uses a mock of the slicer API: it cannot prove the plugin
   works inside PrusaSlicer. Say so rather than implying it does.
 - The flow curve (`EM_CURVE`, `EM_FLOOR` in the plugin) is built from Prusa's published numbers
   (datasheet 1.0 @ 215 °C and 0.38 @ 235 °C; blog 0.45 @ 230 °C). Do not change it without a source, and re-run
   `tools/make_diagrams.py`.
+- The temperature limits (`MIN_TEMP`, `TEMP_OK_MIN`, `TEMP_OK_MAX`, `MAX_SAFE_TEMP`) live in the plugin source; the Python
+  tools read them from there. If you change one, `tests/analyze_test.py` checks the fallbacks still agree.
+- Plugin errors are only logged, never shown, so user-facing alerts must live in the model, the G-code or the
+  printer display; refusals are a visible plate object. Only use dialog parameter types already proven to work
+  (`int`, `float`, `bool`); `combobox` could not be verified against the slicer.
 - The plugin API silently ignores settings of unsupported types (booleans, vectors); keep every plugin write
   read-back-verified or documented as best effort.
 - Never publish personal paths or e-mail addresses in this public repo.

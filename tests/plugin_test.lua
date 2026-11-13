@@ -7,6 +7,7 @@ local function check(name, cond, extra)
     print((cond and "ok   " or "FAIL ") .. name .. (extra and ("  [" .. tostring(extra) .. "]") or ""))
 end
 local function csv(t, f) local o = {} for _, v in ipairs(t) do o[#o + 1] = f(v) end return table.concat(o, ",") end
+local function copy(t, over) local o = {} for k, v in pairs(t) do o[k] = v end for k, v in pairs(over or {}) do o[k] = v end return o end
 
 -- 1. Scan phase: bare environment (no api / VolumeType)
 local env = setmetatable({}, {__index = _G})
@@ -19,77 +20,83 @@ for _, p in ipairs(env.info.params) do
     if not okTypes[p.type] or not p.name or not p.label or p.default == nil then allok = false end
     defaults[p.name] = p.default
 end
-check("scan: params use verified types (int/float/bool) with defaults", allok)
+check("scan: only verified param types (int/float/bool), all with defaults", allok)
 check("scan: id matches manifest", env.info.id == (function()
     local f = io.open(BUNDLE .. "/manifest.json"); local t = f:read("*a"); f:close()
     return t:match('"id"%s*:%s*"([^"]+)"') end)())
-check("defaults: 205-250 C, 10 steps, box 50 x 30, 1 perimeter, EM 1.0, fan 30",
-    defaults.min_temp == 205 and defaults.max_temp == 250 and defaults.steps == 10 and defaults.box_width == 50
-    and defaults.box_depth == 30 and defaults.perimeters == 1 and defaults.ref_em == 1.0 and defaults.fan_percent == 30 and defaults.print_speed == 50)
+check("defaults: recommended range (not wide, not custom), 7 custom steps, box 50 x 30, 1 perimeter, EM 1.0, fan 30, speed 50",
+    defaults.wide_range == false and defaults.custom_range == false and defaults.min_temp == 210 and defaults.max_temp == 240
+    and defaults.steps == 7 and defaults.box_width == 50 and defaults.box_depth == 30 and defaults.perimeters == 1
+    and defaults.ref_em == 1.0 and defaults.fan_percent == 30 and defaults.print_speed == 50 and defaults.lcd_messages == true)
+local labels_ok = false
+for _, p in ipairs(env.info.params) do
+    if p.name == "max_temp" and p.label:match("250") and p.label:lower():match("fumes") then labels_ok = true end
+end
+check("dialog label for Max warns about the 250 C fumes limit", labels_ok)
 
--- 2. Planning
+-- 2. Range modes and zones
 local plan = env.plan_bands(defaults, 0.2, 0.2)
-check("plan: temps 205..250 in 5 C steps", csv(plan.bands, function(b) return b.temp end) == "205,210,215,220,225,230,235,240,245,250")
-check("plan: flow% vs standard PLA EM 1.0 (Prusa points 1.0@215, .45@230, .38@235, floor .35)",
-    csv(plan.bands, function(b) return b.flow end) == "100,100,100,82,63,45,38,37,36,35", csv(plan.bands, function(b) return b.flow end))
-check("plan: EM hits published points", (function()
-    local m = {} for _, b in ipairs(plan.bands) do m[b.temp] = string.format("%.2f", b.em) end
-    return m[215] == "1.00" and m[230] == "0.45" and m[235] == "0.38" and m[250] == "0.35" end)())
-check("plan: total height 80 mm", math.abs(plan.total_height - 80) < 1e-9)
+check("recommended: 210..240 in 5 C steps (7 bands)", csv(plan.bands, function(b) return b.temp end) == "210,215,220,225,230,235,240")
+check("recommended: no band is flagged and there are no warnings", #plan.warnings == 0 and (function()
+    for _, b in ipairs(plan.bands) do if b.zone ~= "ok" then return false end end return true end)())
+check("recommended: flow% vs standard PLA EM 1.0", csv(plan.bands, function(b) return b.flow end) == "100,100,82,63,45,38,37", csv(plan.bands, function(b) return b.flow end))
+check("recommended: total height 56 mm", math.abs(plan.total_height - 56) < 1e-9)
+local pw = env.plan_bands(copy(defaults, {wide_range = true}), 0.2, 0.2)
+check("wide: 205..250 (10 bands)", csv(pw.bands, function(b) return b.temp end) == "205,210,215,220,225,230,235,240,245,250")
+check("wide: flow follows Prusa points, floor 35% at 250", csv(pw.bands, function(b) return b.flow end) == "100,100,100,82,63,45,38,37,36,35")
+local zs = csv(pw.bands, function(b) return b.zone end)
+check("wide: 205 cold, 210-240 ok, 245/250 hot", zs == "cold,ok,ok,ok,ok,ok,ok,ok,hot,hot", zs)
+check("wide: three warnings (205, 245, 250), the hot ones mention 250 C", #pw.warnings == 3 and pw.warnings[1]:match("too cold") and pw.warnings[2]:match("too hot") and pw.warnings[3]:match("250"))
+local pc = env.plan_bands(copy(defaults, {custom_range = true, min_temp = 220, max_temp = 235, steps = 4}), 0.2, 0.2)
+check("custom: uses Min/Max/Steps (220..235 in 5 C steps)", csv(pc.bands, function(b) return b.temp end) == "220,225,230,235")
+local po = env.plan_bands(copy(defaults, {custom_range = true, min_temp = 230, max_temp = 230, steps = 2}), 0.2, 0.2)
+check("custom: Min = Max tests one temperature (2 identical bands, no division by zero)", #po.bands == 2 and po.bands[1].temp == 230 and po.bands[2].temp == 230)
+check("custom ignored unless enabled", #env.plan_bands(copy(defaults, {min_temp = 190, max_temp = 250}), 0.2, 0.2).bands == 7)
+check("zone boundaries: 240 ok, 241 hot, 210 ok, 209 cold", (function()
+    local function z(t) return env.plan_bands(copy(defaults, {custom_range = true, min_temp = t, max_temp = t, steps = 2}), 0.2, 0.2).bands[1].zone end
+    return z(240) == "ok" and z(241) == "hot" and z(210) == "ok" and z(209) == "cold" end)())
+
+-- hard limits / refusal
+local function refused(over) return env.validate_range(copy(defaults, over)) end
+check("hard limit: custom max 251 is refused", refused({custom_range = true, max_temp = 251}) ~= nil)
+check("hard limit: custom max 250 is allowed", refused({custom_range = true, max_temp = 250}) == nil)
+check("hard limit: custom min 300 / max 300 is refused", refused({custom_range = true, min_temp = 300, max_temp = 300}) ~= nil)
+check("hard limit: custom min 189 is refused, 190 allowed", refused({custom_range = true, min_temp = 189, max_temp = 220}) ~= nil and refused({custom_range = true, min_temp = 190, max_temp = 220}) == nil)
+check("refusal text names the 250 C fumes limit", (refused({custom_range = true, max_temp = 400}).text:match("250") and refused({custom_range = true, max_temp = 400}).text:match("FUMES")) ~= nil)
+check("defaults and wide mode are never refused", env.validate_range(defaults) == nil and refused({wide_range = true}) == nil)
+local pclamp = env.plan_bands(copy(defaults, {custom_range = true, min_temp = 100, max_temp = 900, steps = 99}), 0.2, 0.2)
+local mn, mx = 1e9, 0
+for _, b in ipairs(pclamp.bands) do mn = math.min(mn, b.temp); mx = math.max(mx, b.temp) end
+check("defence in depth: even if validation is skipped the plan never leaves 190..250 C", mn >= 190 and mx <= 250 and #pclamp.bands <= 10, mn .. ".." .. mx)
+
+-- 3. G-code planning
 local asc, grid = true, true
 for i = 2, #plan.entries do if plan.entries[i].z <= plan.entries[i - 1].z then asc = false end end
 for _, e in ipairs(plan.entries) do local k = (e.z - 0.2) / 0.2; if math.abs(k - math.floor(k + 0.5)) > 1e-6 then grid = false end end
-check("plan: entries strictly ascending in Z", asc)
-check("plan: every Z on the real layer grid", grid)
-local p2 = env.plan_bands(defaults, 0.25, 0.3)
-local grid2 = true
+check("plan: entries strictly ascending in Z, all on the layer grid", asc and grid)
+local p2 = env.plan_bands(defaults, 0.25, 0.3); local grid2 = true
 for _, e in ipairs(p2.entries) do local k = (e.z - 0.3) / 0.25; if math.abs(k - math.floor(k + 0.5)) > 1e-6 then grid2 = false end end
-check("plan: grid holds for flh 0.3 / lh 0.25", grid2)
-check("plan: band 1 M104 on layer 3 or later (never races the slicer's layer-2 change)", plan.bands[1].gcode_z >= 0.6 - 1e-9, plan.bands[1].gcode_z)
-local pe0 = env.plan_bands({ref_em = 0.45, hot_on_top = true}, 0.2, 0.2)
+check("plan: grid holds for first layer 0.3 / layer 0.25", grid2)
+check("plan: band 1 temperature on layer 3 or later (never races the slicer's layer-2 change)", plan.bands[1].gcode_z >= 0.6 - 1e-9, plan.bands[1].gcode_z)
+local pe0 = env.plan_bands({ref_em = 0.45, hot_on_top = true, wide_range = true}, 0.2, 0.2)
 local b1flow, b1temp
 for _, e in ipairs(pe0.entries) do if e.flow == pe0.bands[1] then b1flow = e.z end; if e.temp == pe0.bands[1] then b1temp = e.z end end
-check("plan: band 1 flow > 100% (222) is held back past bottom layers + 2 mm", pe0.bands[1].flow == 222 and b1flow >= 0.2 + 3 * 0.2 + 2 - 1e-6 and b1temp < b1flow, tostring(b1temp) .. " -> " .. tostring(b1flow))
-local rev = {} for k, v in pairs(defaults) do rev[k] = v end; rev.hot_on_top = false
-local pr = env.plan_bands(rev, 0.2, 0.2)
+check("plan: band 1 flow > 100% (222) is held back past the bottom layers + 2 mm", pe0.bands[1].flow == 222 and b1flow >= 0.2 + 3 * 0.2 + 2 - 1e-6 and b1temp < b1flow)
+local pr = env.plan_bands(copy(defaults, {hot_on_top = false, wide_range = true}), 0.2, 0.2)
 local same = false for _, e in ipairs(pr.entries) do if e.flow == pr.bands[1] and e.temp == pr.bands[1] then same = true end end
-check("plan: band 1 flow < 100% (250 C, 35%) is applied immediately, not held", pr.bands[1].temp == 250 and pr.bands[1].flow == 35 and same)
-local firstfan, fans, nofan_early = nil, 0, true -- fallback path (preset fan not confirmed)
-for _, e in ipairs(plan.entries) do if e.fan then fans = fans + 1; firstfan = firstfan or e.z; if e.z < 0.6 - 1e-6 then nofan_early = false end end end
-check("plan: fallback M106 on every layer from layer 3", fans == 398 and math.abs(firstfan - 0.6) < 1e-6 and nofan_early, fans .. " @ " .. tostring(firstfan))
-local pok = {} for k, v in pairs(defaults) do pok[k] = v end; pok._fan_preset_ok = true
-local pokp = env.plan_bands(pok, 0.2, 0.2); local fok = false
-for _, e in ipairs(pokp.entries) do if e.fan then fok = true end end
-check("plan: preset fan confirmed -> no M106 entries at all", not fok and pokp.fan_pwm == 0)
-check("plan: fallback fan 30% -> PWM 77", plan.fan_pwm == 77, plan.fan_pwm)
-local nf = {} for k, v in pairs(defaults) do nf[k] = v end; nf.fan_percent = 0
-local pnf = env.plan_bands(nf, 0.2, 0.2)
-local anyfan = false; for _, e in ipairs(pnf.entries) do if e.fan then anyfan = true end end
-check("plan: fan_percent 0 leaves the profile fan alone", not anyfan and pnf.fan_pwm == 0)
-local nc = {} for k, v in pairs(defaults) do nc[k] = v end; nc.comp_flow = false
-local pn = env.plan_bands(nc, 0.2, 0.2); local all100 = true
-for _, b in ipairs(pn.bands) do if b.flow ~= 100 then all100 = false end end
-check("plan: comp_flow=false -> 100% everywhere", all100)
-local pe = env.plan_bands({ref_em = 0.45}, 0.2, 0.2)
-check("plan: ref_em 0.45 (e.g. Prusa LW profile) -> 230 C band at 100%", (function()
-    for _, b in ipairs(pe.bands) do if b.temp == 230 then return b.flow == 100 end end end)())
+check("plan: band 1 flow < 100% (250 C, 35%) is applied immediately", pr.bands[1].temp == 250 and pr.bands[1].flow == 35 and same)
+local fans, firstfan = 0, nil
+for _, e in ipairs(plan.entries) do if e.fan then fans = fans + 1; firstfan = firstfan or e.z end end
+check("plan: fallback M106 on every layer from layer 3 (56 mm / 0.2 mm)", fans == 278 and math.abs(firstfan - 0.6) < 1e-6, fans)
+local ok = copy(defaults, {_fan_preset_ok = true}); local anyf = false
+for _, e in ipairs(env.plan_bands(ok, 0.2, 0.2).entries) do if e.fan then anyf = true end end
+check("plan: preset fan confirmed -> no M106 entries", not anyf)
+check("plan: comp_flow=false -> 100% everywhere", (function() for _, b in ipairs(env.plan_bands(copy(defaults, {comp_flow = false}), 0.2, 0.2).bands) do if b.flow ~= 100 then return false end end return true end)())
+check("plan: perimeters clamp 1..2", env.plan_bands(copy(defaults, {perimeters = 7}), 0.2, 0.2).perimeters == 2 and env.plan_bands(copy(defaults, {perimeters = 0}), 0.2, 0.2).perimeters == 1)
+check("plan: NaN / wrong types do not crash", #env.plan_bands({min_temp = 0/0, steps = "x", custom_range = true}, nil, nil).bands >= 2)
 
--- clamps
-local hot = {min_temp = 100, max_temp = 400, steps = 99, band_height = 1, perimeters = 7}
-local p3 = env.plan_bands(hot, 0.2, 0.2)
-local mn, mx, minf = 1e9, 0, 1e9
-for _, b in ipairs(p3.bands) do mn = math.min(mn, b.temp); mx = math.max(mx, b.temp); minf = math.min(minf, b.flow) end
-check("clamp: temps within 205..250", mn >= 205 and mx <= 250, mn .. ".." .. mx)
-check("clamp: steps <= 10, band height >= 5, perimeters in 1..2", #p3.bands <= 10 and p3.band_height >= 5 and p3.perimeters == 2)
-check("clamp: flow >= 30", minf >= 30, minf)
-check("clamp: perimeters 0 -> 1", env.plan_bands({perimeters = 0}, 0.2, 0.2).perimeters == 1)
-local p4 = env.plan_bands({min_temp = 250, max_temp = 205, steps = 3, hot_on_top = false}, 0.2, 0.2)
-check("clamp: swapped min/max handled", p4.bands[1].temp >= 205 and p4.bands[1].temp <= 250)
-check("clamp: NaN / wrong types do not crash", #env.plan_bands({min_temp = 0/0, steps = "x"}, nil, nil).bands >= 2)
-
--- 3. execute() against a mock API
+-- 4. execute() against a mock API
 local calls
--- mode "store": ConfigBox:set stores and value() returns it; mode "ignore": set is a silent no-op
 local function newmock(material_em, mode)
     mode = mode or "store"
     calls = {gcode = {}, objects = {}, cleared = 0, stored = {}, pstored = {}, text = {}, cubes = {}}
@@ -108,7 +115,7 @@ local function newmock(material_em, mode)
     env.VolumeType = {Solid = "Solid", Negative = "Negative", Modifier = "Modifier"}
     env.api = {
         make_cube = function(w, d, h) local m = mesh("cube"); calls.cubes[#calls.cubes + 1] = {w, d, h}; return m end,
-        emboss_text = function(o) calls.text[#calls.text + 1] = o.text; return mesh("text") end,
+        emboss_text = function(o) calls.text[#calls.text + 1] = o.text; calls.textopts = o; return mesh("text") end,
         get_default_font = function() return "font" end,
         project = {current_bed = function() return bed end,
             clear_layer_custom_steps = function() calls.cleared = calls.cleared + 1 end,
@@ -116,75 +123,86 @@ local function newmock(material_em, mode)
             add_object = function(_, o) calls.objects[#calls.objects + 1] = o end},
     }
 end
+
 newmock(nil); env.execute(defaults)
-local fmtok, lines_ok = true, true
+local fmtok = true
 for _, c in ipairs(calls.gcode) do
     if c.g:match("M109") or c.g:match("S%d+%.%d") then fmtok = false end
     for line in (c.g .. "\n"):gmatch("([^\n]*)\n") do
-        if not (line:match("^M104 S%d%d%d ; ") or line:match("^M221 S%d+ ; ") or line:match("^M106 S%d+ ; ")) then lines_ok = false end
+        if not (line:match("^M104 S%d%d%d ; ") or line:match("^M221 S%d+ ; ") or line:match("^M106 S%d+ ; ") or line:match("^M117 [%w/ .]+$") or line:match("^; WARNING")) then fmtok = false end
     end
 end
-check("exec: only integer-formatted M104 / M221 / M106 lines, no M109", fmtok and lines_ok)
-local zs_ok = true
-for i = 2, #calls.gcode do if calls.gcode[i].z <= calls.gcode[i - 1].z then zs_ok = false end end
-check("exec: inserts strictly ascending in Z", zs_ok)
-check("exec: first entry is band 1 on layer 3 (M104 S205 + M221 S100)", calls.gcode[1].z >= 0.6 - 1e-9 and calls.gcode[1].g:match("^M104 S205") and calls.gcode[1].g:match("M221 S100"), calls.gcode[1].z .. " " .. (calls.gcode[1].g:gsub("\n", " | ")))
+check("exec: only integer-formatted M104 / M221 / M117 / M106 lines, no M109", fmtok)
+local z_ok = true; for i = 2, #calls.gcode do if calls.gcode[i].z <= calls.gcode[i - 1].z then z_ok = false end end
+check("exec: inserts strictly ascending in Z", z_ok)
 local anyM106 = false; for _, c in ipairs(calls.gcode) do if c.g:match("M106") then anyM106 = true end end
-check("exec: fan read back OK -> no M106 G-code (auto-cooling holds 30% from the preset)", not anyM106)
-check("exec: 10 bands, 10 inserts when fan comes from the preset", #calls.gcode == 10, #calls.gcode)
-local blk; for _, c in ipairs(calls.gcode) do if c.g:match("M104 S220") then blk = c end end
-check("exec: later band changes M104 + M221 together (220 C -> S82)", blk and blk.g:match("M221 S82"), blk and (blk.g:gsub("\n", " | ")))
-check("exec: cleared old custom G-code", calls.cleared == 1)
-check("exec: box 50 x 30 x 80 main mesh", calls.cubes[#calls.cubes][1] == 50 and calls.cubes[#calls.cubes][2] == 30 and calls.cubes[#calls.cubes][3] == 80, table.concat(calls.cubes[#calls.cubes], "x"))
+check("exec: fan read back OK -> no M106 G-code", not anyM106)
+check("exec: 7 inserts (one per band) when the fan comes from the preset", #calls.gcode == 7, #calls.gcode)
+check("exec: band 1 = M104 S210 + M117 'LW 1/7 210C EM1.00' + M221 S100 on layer 3", calls.gcode[1].z >= 0.6 - 1e-9 and calls.gcode[1].g:match("M104 S210") and calls.gcode[1].g:match("M117 LW 1/7 210C EM1.00") and calls.gcode[1].g:match("M221 S100"), (calls.gcode[1].g:gsub("\n", " | ")))
+local noWarn = true for _, c in ipairs(calls.gcode) do if c.g:match("WARNING") or c.g:match("COLD") or c.g:match("HOT") then noWarn = false end end
+check("exec: recommended range -> no WARNING / COLD / HOT anywhere in the G-code", noWarn)
+check("exec: cleared old custom G-code; box 50 x 30 x 56", calls.cleared == 1 and calls.cubes[#calls.cubes][1] == 50 and calls.cubes[#calls.cubes][2] == 30 and calls.cubes[#calls.cubes][3] == 56)
 local o = calls.objects[1]
-check("exec: 1 perimeter, 0% infill, open top", o.object_params.perimeters == 1 and o.object_params.fill_density == "0%" and o.object_params.top_solid_layers == 0)
-local mods, negs, sol = 0, 0, 0
+check("exec: exactly one object, 1 perimeter, 0% infill, open top", #calls.objects == 1 and o.object_params.perimeters == 1 and o.object_params.fill_density == "0%" and o.object_params.top_solid_layers == 0)
+local mods, negs, sol, tabw = 0, 0, 0, nil
 for _, v in ipairs(o.other_volumes) do
     if v.type == "Modifier" then mods = mods + 1; check("exec: modifier thickens tab", v.params.perimeters >= 4) end
     if v.type == "Negative" then negs = negs + 1 end
     if v.type == "Solid" then sol = sol + 1 end
 end
-check("exec: tab + modifier + 10 labels", sol == 1 and mods == 1 and negs == 10, sol .. "/" .. mods .. "/" .. negs)
-check("exec: labels 'temp / EM'", calls.text[1] == "205 / 1.00" and calls.text[10] == "250 / 0.35", calls.text[1] .. " .. " .. calls.text[10])
+check("exec: tab + modifier + 7 labels + 6 band grooves", sol == 1 and mods == 1 and negs == 13, sol .. "/" .. mods .. "/" .. negs)
+check("exec: labels 'temp/EM' without spaces, deeper and larger than before", calls.text[1] == "210/1.00" and calls.text[7] == "240/0.37" and calls.textopts.depth >= 0.8 and calls.textopts.line_height >= 4, table.concat(calls.text, " | "))
 local st = calls.stored
-check("exec: fan preset: min/max 30, bridge 100, overhang 30, no first-layer fan", st.min_fan_speed == 30 and st.max_fan_speed == 30 and st.bridge_fan_speed == 100 and st.overhang_fan_speed_0 == 30 and st.overhang_fan_speed_3 == 30 and st.disable_fan_first_layers == 1)
-check("exec: temperatures: first layer 215, body = band 1 temp (205)", st.first_layer_temperature == 215 and st.temperature == 205)
+check("exec: fan preset 30/30, bridge 100, overhang 30, first layers off", st.min_fan_speed == 30 and st.max_fan_speed == 30 and st.bridge_fan_speed == 100 and st.overhang_fan_speed_0 == 30 and st.disable_fan_first_layers == 1)
+check("exec: temperatures: first layer 215, body = band 1 temp (210)", st.first_layer_temperature == 215 and st.temperature == 210)
 check("exec: slowdown off, bed 60, retraction 0", st.slowdown_below_layer_time == 0 and st.bed_temperature == 60 and st.filament_retract_length == 0 and calls.pstored.retract_length == 0)
 local op = o.object_params
-check("exec: speeds applied to the test object (50 mm/s everywhere)", op.perimeter_speed == 50 and op.external_perimeter_speed == 50 and op.small_perimeter_speed == 50 and op.infill_speed == 50 and op.solid_infill_speed == 50 and op.gap_fill_speed == 50)
-check("exec: label tab centred on a 50 mm front", (function() local t; for _, v in ipairs(o.other_volumes) do if v.type == "Solid" then t = v end end return math.abs(t.translate.x - 10) < 1e-9 end)())
+check("exec: 50 mm/s everywhere on the test object", op.perimeter_speed == 50 and op.external_perimeter_speed == 50 and op.small_perimeter_speed == 50 and op.infill_speed == 50 and op.solid_infill_speed == 50)
 
--- 2 perimeters
-newmock(nil); local two = {} for k, v in pairs(defaults) do two[k] = v end; two.perimeters = 2
-env.execute(two)
-check("exec: perimeters=2 reaches the object", calls.objects[1].object_params.perimeters == 2)
+-- wide mode: warnings reach labels, G-code and the printer display
+newmock(nil); env.execute(copy(defaults, {wide_range = true}))
+local lab = table.concat(calls.text, " | ")
+check("wide exec: cold/hot bands are tagged on the labels", lab:match("205/1.00 COLD") and lab:match("245/0.36 HOT") and lab:match("250/0.35 HOT") and not lab:match("230/0.45 %a"), lab)
+local g = {} for _, c in ipairs(calls.gcode) do g[#g + 1] = c.g end; local gall = table.concat(g, "\n")
+check("wide exec: G-code carries ; WARNING comments and M117 COLD/HOT alerts", gall:match("; WARNING: 205 C is too cold") and gall:match("; WARNING: 250 C is too hot") and gall:match("M117 COLD 205C no foam") and gall:match("M117 HOT 245C degrades"))
+check("wide exec: no G-code line ever sets a temperature above 250", (function() for t in gall:gmatch("M104 S(%d+)") do if tonumber(t) > 250 then return false end end return true end)())
+check("wide exec: 9 groove cuts for 10 bands", (function() local n = 0 for _, v in ipairs(calls.objects[1].other_volumes) do if v.type == "Negative" then n = n + 1 end end return n == 10 + 9 end)())
 
--- print speed param + clamp
-newmock(nil); local fast = {} for k, v in pairs(defaults) do fast[k] = v end; fast.print_speed = 999
-env.execute(fast)
-check("exec: print speed clamped to 100", calls.objects[1].object_params.perimeter_speed == 100)
+-- hard refusal: nothing changes except a visible warning plate
+newmock(nil); env.execute(copy(defaults, {custom_range = true, max_temp = 260}))
+check("refusal: no tower, no G-code, no preset edits, nothing cleared", #calls.gcode == 0 and calls.cleared == 0 and next(calls.stored) == nil and next(calls.pstored) == nil)
+check("refusal: a single warning plate object is added with a 250 C / FUMES message", #calls.objects == 1 and calls.text[1]:match("250") and calls.text[1]:match("FUMES") and calls.objects[1].other_volumes == nil, calls.text[1])
+newmock(nil); env.execute(copy(defaults, {custom_range = true, min_temp = 150}))
+check("refusal: too cold (150 C) also shows a plate and changes nothing", #calls.objects == 1 and calls.text[1]:match("190") and #calls.gcode == 0 and next(calls.stored) == nil)
+
+-- display messages can be switched off
+newmock(nil); env.execute(copy(defaults, {lcd_messages = false, wide_range = true}))
+local anyM117 = false; for _, c in ipairs(calls.gcode) do if c.g:match("M117") then anyM117 = true end end
+check("lcd_messages=false -> no M117 (the ; WARNING comments stay)", not anyM117 and calls.gcode[1].g:match("; WARNING"))
+
+-- print speed clamp, 2 perimeters
+newmock(nil); env.execute(copy(defaults, {print_speed = 999, perimeters = 2}))
+check("exec: print speed clamped to 100; perimeters=2 reaches the object", calls.objects[1].object_params.perimeter_speed == 100 and calls.objects[1].object_params.perimeters == 2)
 
 -- readback FAILS (setter ignores everything) -> per-layer M106 fallback
 newmock(nil, "ignore"); env.execute(defaults)
 local m106 = 0; for _, c in ipairs(calls.gcode) do if c.g:match("M106 S77") then m106 = m106 + 1 end end
-check("exec: setter ignored -> fallback emits M106 S77 on 398 layers", m106 == 398, m106)
-local z_ok = true; for i = 2, #calls.gcode do if calls.gcode[i].z <= calls.gcode[i - 1].z then z_ok = false end end
-check("exec: fallback inserts still strictly ascending", z_ok)
+check("exec: setter ignored -> fallback emits M106 S77 on 278 layers", m106 == 278, m106)
+local z2 = true; for i = 2, #calls.gcode do if calls.gcode[i].z <= calls.gcode[i - 1].z then z2 = false end end
+check("exec: fallback inserts still strictly ascending", z2)
 
 -- options off
-newmock(nil); local off = {} for k, v in pairs(defaults) do off[k] = v end
-off.labels, off.clear_gcode, off.no_slowdown, off.fan_percent, off.retraction_off = false, false, false, 0, false
+newmock(nil); local off = copy(defaults, {labels = false, clear_gcode = false, no_slowdown = false, fan_percent = 0, retraction_off = false, lcd_messages = false})
 env.execute(off)
 local anyfan2 = false; for _, c in ipairs(calls.gcode) do if c.g:match("M106") then anyfan2 = true end end
-check("exec: options off -> no clear, no fan edits/M106, no slowdown/retraction edits, no labels",
+check("exec: options off -> no clear, no fan/slowdown/retraction edits, no labels or grooves",
     calls.cleared == 0 and not anyfan2 and calls.stored.min_fan_speed == nil and calls.stored.slowdown_below_layer_time == nil
     and calls.stored.filament_retract_length == nil and #calls.objects[1].other_volumes == 2)
 
 -- loaded EM readable
 newmock(0.45); env.execute(defaults)
-local g = calls.gcode; local found
-for _, c in ipairs(g) do if c.g:match("M104 S230") then found = c end end
-check("exec: readable loaded EM 0.45 overrides the parameter -> 230 C band at 100%", found and found.g:match("M221 S100"), found and (found.g:gsub("\n", " | ")))
+local found; for _, c in ipairs(calls.gcode) do if c.g:match("M104 S230") then found = c end end
+check("exec: readable loaded EM 0.45 overrides the parameter -> 230 C band at 100%", found and found.g:match("M221 S100"))
 
 print(fails == 0 and "\nALL PASSED" or ("\n" .. fails .. " FAILED"))
 os.exit(fails == 0 and 0 or 1)

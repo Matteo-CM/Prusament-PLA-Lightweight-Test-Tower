@@ -20,6 +20,9 @@ import re
 import sys
 import uuid
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import lwcurve  # noqa: E402  (limits and usable range come from the plugin source)
+
 PARENT_DEFAULT = "Prusament PLA"
 # Same printer list and exclusion the stock "Prusament PLA" preset uses.
 PRINTERS_DEFAULT = "COREONE|MK4|MK3.5|MK2|XL|MK3|MK2.5|MINI|COREONE_INDX"
@@ -43,8 +46,8 @@ BAKE_KEYS = [
     "pressure_advance_value",
 ]
 
-MAX_TEMP = 250  # Prusa: do not exceed 250 C with this filament (fumes)
-MIN_TEMP = 190
+MAX_TEMP = lwcurve.MAX_SAFE_TEMP  # Prusa: never above 250 C with this filament (toxic fumes)
+MIN_TEMP = lwcurve.MIN_TEMP
 
 
 def build_condition(printers, nozzle, high_flow):
@@ -133,6 +136,12 @@ def make_preset(args):
     first = int(round(args.first_layer_temp)) if args.first_layer_temp is not None else temp
     if not (MIN_TEMP <= first <= MAX_TEMP):
         raise ValueError("--first-layer-temp must be between %d and %d C" % (MIN_TEMP, MAX_TEMP))
+    for label, t in (("--temp", temp), ("--first-layer-temp", first)):
+        if t > lwcurve.TEMP_OK_MAX or t < lwcurve.TEMP_OK_MIN:
+            args._warnings = getattr(args, "_warnings", []) + [
+                "%s %d C is outside the usable range %d-%d C found in the test print (%s)" % (
+                    label, t, lwcurve.TEMP_OK_MIN, lwcurve.TEMP_OK_MAX,
+                    "too cold: the filament will not foam" if t < lwcurve.TEMP_OK_MIN else "too hot: the surface degrades; never exceed %d C" % lwcurve.MAX_SAFE_TEMP)]
     for label, val in (("--fan", args.fan), ("--bridge-fan", args.bridge_fan)):
         if not (0 <= val <= 100):
             raise ValueError("%s must be 0-100 %%" % label)
@@ -265,6 +274,9 @@ def main(argv=None):
     except ValueError as exc:
         print("error: %s" % exc, file=sys.stderr)
         return 2
+
+    for w in getattr(args, "_warnings", []):
+        print("WARNING: %s" % w, file=sys.stderr)
 
     if args.print_only:
         sys.stdout.write(text)

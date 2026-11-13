@@ -72,12 +72,46 @@ presets. Save under a new name (for example "Prusament PLA - LW test") or discar
    `~/.var/app/com.prusa3d.PrusaSlicer/config/PrusaSlicer3-dev/lua/`. Copy, don't symlink.
    Unsigned bundles load from this folder with no key needed; don't use the ZIP importer.
 
+## Range, warnings and safety
+
+The first test print (205 to 250 °C on a CORE One 0.4 HF) showed where this filament is usable:
+
+| Zone | Temperatures | What happens |
+|---|---|---|
+| **Too cold** | below 210 °C | dense and dark, not foaming (205 °C band) |
+| **Usable** | 210 to 240 °C | foamed, clean surface, readable labels |
+| **Too hot** | above 240 °C | the surface degrades and the engraving blurs (245 and 250 °C bands) |
+| **Forbidden** | above 250 °C | Prusa: toxic fumes. **The plugin refuses.** |
+
+So the plugin **defaults to 210-240 °C** (7 bands, 56 mm tall). A **Wide test** switch gives the full 205-250 °C
+range if you want to see both failure ends on your own printer, and **Custom range** lets you pick Min / Max / Steps
+(Min = Max tests a single temperature).
+
+You are warned in four places, because the plugin API cannot pop up a message box (errors are only written to the
+slicer log):
+1. **In the dialog:** the Min and Max labels state the limits (below 210 too cold, above 240 too hot, hard limit 250).
+2. **In the model:** a band outside 210-240 °C is engraved `COLD` or `HOT` (for example `245/0.36 HOT`).
+3. **In the G-code:** a `; WARNING: ...` comment on that band.
+4. **On the printer display:** `M117` shows `LW 3/7 220C EM0.82` for a normal band and `COLD 205C no foam` /
+   `HOT 245C degrades` for a flagged one (switch off with *Show band / warning messages*; a firmware without `M117`
+   ignores it).
+
+**Above 250 °C (or below 190 °C) is refused, not clamped.** The plugin changes nothing (no presets, no G-code, no
+tower) and puts a text object in the plater that reads `NO - ABOVE 250 C = TOXIC FUMES` (or `NO - BELOW 190 C = TOO
+COLD`). Delete it and run again with a legal range. Even if validation were bypassed, the planner never emits a
+temperature outside 190-250 °C.
+
+The labels are larger and deeper than in the first version (foamed bands blur shallow engraving), and a groove across the tab
+marks every band boundary, so a band is identifiable even when its text is unreadable.
+
 ## Parameters
 | Parameter | Default | Meaning |
 |---|---|---|
-| Min / Max Temperature | 205 / 250 | Band range (clamped 205-250). |
-| Num Steps | 10 | Bands (2-10): 205, 210 … 250. |
-| Band Height | 8 mm | 10 bands → 80 mm tall. Taller bands let the hot end settle. |
+| Wide test 205-250 C | off | Shows too-cold and too-hot bands (10 bands, 80 mm). |
+| Custom range | off | Use Min / Max / Steps below instead of the 210-240 °C default. |
+| Custom Min / Max | 210 / 240 | Clamped to **190-250 °C**; outside that the plugin refuses. Below 210 / above 240 is flagged COLD / HOT. |
+| Custom Num Steps | 7 | 2-10 bands. Min = Max tests one temperature. |
+| Band Height | 8 mm | Taller bands let the hot end settle. |
 | Box Front/Back Width | 50 mm | X size: the 5 cm faces (front carries the label tab, rear carries the seam). |
 | Box Side Length | 30 mm | Y size: the 3 cm **side walls, which you measure**. |
 | Perimeters | 1 | 1 or 2 (clamped). With 2 the two lines overlap at 0.2 mm layers: target about **0.85-0.9 mm**, and the EM formula below is only approximate. |
@@ -87,7 +121,8 @@ presets. Save under a new name (for example "Prusament PLA - LW test") or discar
 | Fan Speed | 30 % | 0 = leave the profile's fan alone. |
 | Try To Turn Retraction Off | on | Best-effort, see above. |
 | Hottest Band On Top | on | Order of bands. |
-| Engrave Labels | on | Front tab shows `temp / EM` for each band. |
+| Engrave Labels And Band Grooves | on | Front tab shows `temp/EM` per band plus a groove at every band boundary. |
+| Show Band / Warning Messages (M117) | on | Band number and COLD / HOT alerts on the printer display. |
 | Clear Existing Custom G-code | on | Prevents stacked temperature changes on re-runs. |
 | Disable Layer-time Slowdown | on | Sets `slowdown_below_layer_time` to 0 on the **active filament preset (unsaved edit)**. |
 
@@ -103,7 +138,7 @@ contains `M221 S100`; check yours. During a band, *Tune → Flow* on the printer
 percentage; if it shows more or less, the printer clamped it.
 
 ## Reading the result
-Measure the wall at mid-height of the upper half of each band (calipers, target **0.45-0.5 mm for 1 perimeter**).
+Measure the wall at mid-height of the upper half of each band (calipers, target **0.45-0.5 mm for 1 perimeter**). Only 210-240 °C bands are worth measuring. To skip the arithmetic, type your readings into `python3 tools/analyze_results.py 210=0.62 220=0.55 230=0.50` (see the repository README); it prints the multiplier each band needs and flags anything out of range.
 The band's effective multiplier is the label value (`temp / EM`). The multiplier that gives the target wall:
 
 `EM_needed = EM_band × target_width / measured_width`
@@ -113,19 +148,27 @@ filament's extrusion multiplier for that temperature. The lightest, palest band 
 quality and stringing tell you where to stop. To confirm, re-run with Min = Max at one temperature.
 
 ## Known limits / not verified
-- Developed against the documented alpha13/14 Lua API and Prusa's own `temp_tower.lua`; tested
-  with a mock API in LuaJIT (`tests/plugin_test.lua`, kept next to the bundle folder, not inside it;
-  run `luajit tests/plugin_test.lua`). **Not yet run inside PrusaSlicer** (the CLI has no validate command).
+- Developed against the documented alpha13/14 Lua API and Prusa's own `temp_tower.lua`; logic tested with a mock
+  API in LuaJIT (`luajit tests/plugin_test.lua`, kept next to the bundle folder, not inside it). The first version
+  was printed and measured (see the repository README); the CLI has no plugin validate command.
+- **Confirmed by the first print:** the tower, the front tab and the engraved labels work, and the usable range is
+  210-240 °C. **Not yet seen in the slicer since:** the larger/deeper labels, the band grooves, the `COLD`/`HOT` tags,
+  the refusal plate and the `M117` display messages, so check the preview.
+- A dropdown parameter exists in the plugin API, but its exact type name could not be confirmed against the
+  slicer, so only verified types (switches and numbers) are used. That is why the range is two switches plus
+  Min / Max / Steps.
+- The dialog cannot show alerts and plugin errors only reach the log, which is why warnings are put in the
+  model, the G-code and the printer display, and why a refusal is a visible plate.
 - The datasheet multipliers (1.0 @ 215 °C, 0.38 @ 235 °C) came from dense specimens (2 perimeters, 100 % infill,
   MK4S, PrusaSlicer 2.9.6), not from a single-wall box, so expect your measured values to differ.
-- Label orientation/position follow Prusa's own temp tower (`rotate x=90`); if the engraving
-  lands on the wrong side, only `front_label()` needs adjusting.
 - `seam_position`, per-volume `perimeters` on the modifier and the preset edits are set through a setter
   that fails silently on unsupported keys; check the preview and the checklist above.
-- Flow is held at EM 1.0 below 215 °C (outside Prusa's published range, where foaming is negligible) and
-  slides to Prusa's 0.35 floor at 250 °C; those two ends are assumptions.
-- "5 cm × 3" was read as a 50 × 30 mm footprint (3 cm side walls measured); the 80 mm height is
-  10 bands × 8 mm.
+- Flow is held at EM 1.0 below 215 °C and slides to Prusa's 0.35 floor at 250 °C; those two ends are
+  assumptions (and both lie outside the usable range).
+- "5 cm × 3" was read as a 50 × 30 mm footprint (3 cm side walls measured); the default height is
+  7 bands × 8 mm = 56 mm (80 mm in the wide test).
+- The 210-240 °C range comes from one print on one printer and one spool. Treat it as a strong default, and use the
+  wide test to check your own setup.
 
 ## Next: turn the result into a filament profile
 Once you know your temperature and extrusion multiplier, see the [repository README](../README.md#3-let-claude-make-the-profile): Claude (or `tools/make_profile.py`) can generate a PrusaSlicer 3 filament preset for you.
