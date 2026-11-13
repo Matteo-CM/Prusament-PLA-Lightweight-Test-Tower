@@ -155,6 +155,7 @@ check("exec: labels 'temp/EM' without spaces, deeper and larger than before", ca
 local st = calls.stored
 check("exec: fan preset 30/30, bridge 100, overhang 30, first layers off", st.min_fan_speed == 30 and st.max_fan_speed == 30 and st.bridge_fan_speed == 100 and st.overhang_fan_speed_0 == 30 and st.disable_fan_first_layers == 1)
 check("exec: temperatures: first layer 215, body = band 1 temp (210)", st.first_layer_temperature == 215 and st.temperature == 210)
+check("exec: Prusa's other LW values: pressure advance 0, Z-hop 0, travel ramping 0", st.pressure_advance_value == 0 and st.retract_lift == 0 and st.travel_ramping_lift == 0)
 check("exec: slowdown off, bed 60, retraction 0", st.slowdown_below_layer_time == 0 and st.bed_temperature == 60 and st.filament_retract_length == 0 and calls.pstored.retract_length == 0)
 local op = o.object_params
 check("exec: 50 mm/s everywhere on the test object", op.perimeter_speed == 50 and op.external_perimeter_speed == 50 and op.small_perimeter_speed == 50 and op.infill_speed == 50 and op.solid_infill_speed == 50)

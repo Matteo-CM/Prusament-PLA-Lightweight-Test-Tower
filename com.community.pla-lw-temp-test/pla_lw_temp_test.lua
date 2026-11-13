@@ -374,6 +374,10 @@ function execute(opts)
         end
         put(m, "bed_temperature", 60)
         put(m, "first_layer_bed_temperature", 60)
+        -- As in Prusa's own Lightweight profiles: pressure advance off (M572 S0), no Z-hop, no travel Z-ramping.
+        put(m, "pressure_advance_value", 0)
+        put(m, "retract_lift", 0)
+        put(m, "travel_ramping_lift", 0)
     end)
     if opts.retraction_off then
         each_material(function(m) put(m, "filament_retract_length", 0) end)

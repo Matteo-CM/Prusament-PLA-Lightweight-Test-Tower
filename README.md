@@ -28,6 +28,8 @@
 >   releases, so this project may stop working at any time.
 > - **Once Prusa ships an official Prusament PLA Lightweight profile for PrusaSlicer 3, use that instead.** Prusa's own
 >   profile is the better choice. The same goes for any PrusaSlicer version that already includes one.
+>   (Prusa already publishes official Lightweight profiles for PrusaSlicer 2.x; see
+>   [how this project compares](docs/PRUSA-OFFICIAL-PROFILE.md).)
 > - **This is a community project.** It is not made, endorsed or supported by Prusa Research. The settings come from
 >   Prusa's published documentation plus our own test prints. Nothing is guaranteed: use it at your own risk and never
 >   print above 250 °C.
@@ -208,24 +210,34 @@ compared the G-code the printer would receive:
 
 | Setting | Stock Prusament PLA | Generated profile |
 |---|---|---|
-| Retractions | 405 retractions of 0.7 mm | **0** |
+| Retractions | 405 retractions of 0.7 mm | **0** (see the open question below) |
+| Z-hop and travel Z-ramping | 1,360 Z moves while travelling | **0** |
 | Fan | 85-100 % (plus dynamic overhang fans) | **30 %**, 100 % on bridges, ramping up over the first layers |
-| Print speed | perimeters 150 mm/s, outer 200 mm/s | **about 50 mm/s** (bridges slower) |
-| Extrusion multiplier | 1.0 | **your value** (0.43 in this run) |
+| Print speed | perimeters 150 mm/s, outer 200 mm/s | **about 49 mm/s** (bridges slower) |
+| Pressure advance | `M572 S0.036` | **off** (`M572 S0`) |
+| Extrusion multiplier | 1.0 | **your value** (0.45 in this run) |
 | Temperature | 230 °C | **your value** |
-| Layer-time slowdown | on | off |
+| Auto-cooling and layer-time slowdown | on | off |
 | CORE One heatbreak command (`M142 S36`) | yes | **kept** |
-| Pressure advance (`M572 S0.036`) | yes | kept (see below) |
 
-The **printer profile needs no change**: the filament profile overrides retraction, so the printer's own retraction
-setting is never used. Speed is controlled with the filament's *maximum volumetric speed* (how much plastic per second
-may be pushed through the nozzle), the right control for a foaming filament because foaming depends on how long the
-plastic sits in the hot end. It matches the tower, which was printed at about 50 mm/s.
+**These values were cross-checked against Prusa's own Lightweight profile**, which Prusa publishes on GitHub in the
+PrusaSlicer 2.x settings bundle. The generated profile matches it on temperature, multiplier, bed, auto-cooling off, fan,
+speed limit (Prusa: 4 mm³/s), Z-hop, travel ramping and pressure advance. Details and the one open question are in
+**[docs/PRUSA-OFFICIAL-PROFILE.md](docs/PRUSA-OFFICIAL-PROFILE.md)**.
 
-**Pressure advance** is left at your printer's stock value. Foaming filament is compressible, so some people lower it. To
-try that: `--pressure-advance 0.01` (verified to reach the G-code).
+The **printer profile needs no change**: the filament profile overrides what it needs. Speed is controlled with the
+filament's *maximum volumetric speed* (how much plastic per second may be pushed through the nozzle), exactly as Prusa
+does, which suits a foaming filament because foaming depends on how long the plastic sits in the hot end. It matches the
+tower, which was printed at about 50 mm/s.
 
-**Still manual:** "Avoid crossing perimeters" (a print setting) and drying the filament.
+> [!NOTE]
+> **Open question: retraction.** Prusa's blog and Knowledge Base say retraction is off or ineffective for this
+> filament, but Prusa's shipped profile keeps the printer's 0.7 mm retraction (it only removes the Z-hop). This project
+> defaults to *off*. To match the shipped profile, add `--keep-retraction`.
+
+**Still manual:** "Avoid crossing perimeters" (a print setting; Prusa's own profile doesn't set it either) and drying
+the filament. Fan: 30 % is Prusa's value for the CORE One, MK4S and XL+; their MK4 / MK3.9 profile uses 45 % and the XL
+0.4 HF 50 % (`--fan`).
 
 Reproduce the comparison with `python3 tools/check_gcode.py` (see `CLAUDE.md`).
 
@@ -271,7 +283,8 @@ python3 tools/make_profile.py --temp 230 --em 0.43 --printers COREONE --nozzle 0
 | Tower printed: 205 °C too cold, 210-240 °C usable, 245-250 °C too hot | ✅ first print, one printer, one spool |
 | Plugin maths, G-code order and formatting | ✅ mock-API tests (`luajit tests/plugin_test.lua`) |
 | Generated preset loads and resolves correctly in the slicer | ✅ checked with the slicer CLI |
-| Generated preset in real sliced G-code: retractions 405 → 0, fan 30 %, speed about 50 mm/s | ✅ `tools/check_gcode.py` |
+| Generated preset in real sliced G-code: retractions 405 → 0, Z-hop 1,360 → 0, pressure advance off, fan 30 %, speed about 49 mm/s | ✅ `tools/check_gcode.py` |
+| Generated preset matches Prusa's official Lightweight profile on 12 of 14 compared settings | ✅ `tools/official_lw.py` (the 2 differences are explained) |
 | Larger labels, band grooves, COLD/HOT tags, refusal plate, `M117` messages | ⏳ added after the first print, not yet seen in the slicer |
 | Walls measured and a generated profile test-printed | ⏳ in progress |
 | Fan, retraction and first-layer settings written by the plugin | ⚠️ the plugin API silently ignores some setting types, so the plugin reads them back; see the checklist in the plugin README |
@@ -303,13 +316,15 @@ python3 -I tests/profile_test.py      # preset generator (PyYAML optional, used 
 python3 -I tests/resolve_test.py      # helper functions
 python3 -I tests/analyze_test.py      # results analyzer and shared limits
 python3 -I tests/gcode_test.py        # G-code comparison parser
+python3 -I tests/official_test.py     # reader for Prusa's official profile
 python3 tools/make_diagrams.py        # regenerate docs/images/*.svg from the plugin's numbers
 ```
 
 | Path | What |
 |---|---|
 | `com.community.pla-lw-temp-test/` | the plugin ([README](com.community.pla-lw-temp-test/README.md)) |
-| `tools/` | analyzer, profile generator, slicer helper, G-code check, diagram generator |
+| `tools/` | analyzer, profile generator, slicer helper, G-code check, official-profile comparison, diagram generator |
+| `docs/PRUSA-OFFICIAL-PROFILE.md` | Prusa's official Lightweight profile vs. this project |
 | `CLAUDE.md` | step-by-step instructions Claude follows to make and verify a profile |
 | `docs/REFERENCES.md` | every Prusa link and what it was used for |
 

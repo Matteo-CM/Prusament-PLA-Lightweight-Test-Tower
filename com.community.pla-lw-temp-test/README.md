@@ -10,6 +10,8 @@
 >   releases, so this project may stop working at any time.
 > - **Once Prusa ships an official Prusament PLA Lightweight profile for PrusaSlicer 3, use that instead.** Prusa's own
 >   profile is the better choice. The same goes for any PrusaSlicer version that already includes one.
+>   (Prusa already publishes official Lightweight profiles for PrusaSlicer 2.x; see
+>   [how this project compares](../docs/PRUSA-OFFICIAL-PROFILE.md).)
 > - **This is a community project.** It is not made, endorsed or supported by Prusa Research. The settings come from
 >   Prusa's published documentation plus our own test prints. Nothing is guaranteed: use it at your own risk and never
 >   print above 250 °C.

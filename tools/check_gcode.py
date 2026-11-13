@@ -56,6 +56,7 @@ def analyse(text):
         return m.group(1) if m else None
     return {
         "retractions": len(ret),
+        "z_moves_in_travel": sum(1 for l in body if re.match(r"G1 X[-\d.]+ Y[-\d.]+ Z[-\d.]+", l)),
         "retraction_mm": sorted(set(ret)),
         "temperatures": sorted({int(t) for t in re.findall(r"M10[49] S(\d+)", joined) if int(t) > 0}),
         "fan_values": collections.Counter(int(v) for v in re.findall(r"M106 S(\d+)", body_joined)).most_common(5),
@@ -79,6 +80,7 @@ def slice_once(slicer, work, printer, print_profile, material, stl, out):
 
 def report(stock, new):
     rows = [("retractions in the print (count)", "retractions"), ("retraction length (mm)", "retraction_mm"),
+            ("travel moves that also change Z (Z-hop / ramping)", "z_moves_in_travel"),
             ("temperatures (M104/M109)", "temperatures"), ("fan M106 (value, uses)", "fan_values"),
             ("flow (M221 %)", "flow"), ("pressure advance (M572)", "pressure_advance"),
             ("heatbreak (M142)", "heatbreak"), ("estimated time", "time"), ("filament used (g)", "filament_g")]

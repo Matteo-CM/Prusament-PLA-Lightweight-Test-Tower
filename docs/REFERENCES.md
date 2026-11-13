@@ -34,6 +34,13 @@ and the test-specimen multipliers (**1.0 at 215 °C and 0.38 at 235 °C**, cooli
 Lightweight datasheet was not found, and the PDF is Prusa's, so it is not included here. Look for it on the
 product page or on prusament.com.
 
+## Prusa's official Lightweight profile (GitHub)
+
+| Source | Used for |
+|---|---|
+| [prusa3d/PrusaSlicer-settings-prusa-fff](https://github.com/prusa3d/PrusaSlicer-settings-prusa-fff) | Prusa's FFF settings bundle (`PrusaResearch/<version>.ini`) with the official Prusament PLA Lightweight profiles for MK4S, XL, CORE One and more. Added in 2.5.10 ([commit `65c5c8f`](https://github.com/prusa3d/PrusaSlicer-settings-prusa-fff/commit/65c5c8f)). Compared with this project in [PRUSA-OFFICIAL-PROFILE.md](PRUSA-OFFICIAL-PROFILE.md) |
+| [Prusa's GitHub organisation](https://github.com/prusa3d) | The other settings repositories (`PrusaSlicer-settings-*`) and the PrusaSlicer source |
+
 ## Calibration and print-quality background
 
 | Source | Used for |

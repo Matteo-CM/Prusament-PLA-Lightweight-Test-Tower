@@ -54,12 +54,19 @@ class ProfileYaml(unittest.TestCase):
         self.assertEqual(val["temperature"], 240)
         self.assertEqual(val["first_layer_temperature"], 240)
         self.assertAlmostEqual(val["extrusion_multiplier"], 0.37)
-        self.assertEqual((val["min_fan_speed"], val["max_fan_speed"], val["bridge_fan_speed"]), (30, 30, 100))
+        # cooling as in Prusa's own Lightweight profiles: auto-cooling off, fan = min_fan_speed, bridges 100 %
+        self.assertEqual((val["cooling"], val["fan_always_on"], val["min_fan_speed"], val["bridge_fan_speed"]), (0, 1, 30, 100))
+        self.assertNotIn("max_fan_speed", val)                 # unused with cooling off; left as stock
+        self.assertNotIn("enable_dynamic_fan_speeds", val)     # Prusa keeps the stock overhang fans
         self.assertEqual(val["retract_length"], 0)
         self.assertEqual(val["slowdown_below_layer_time"], 0)
-        self.assertEqual(val["enable_dynamic_fan_speeds"], 0)
         self.assertEqual(val["retract_before_wipe"], "0%")
         self.assertEqual(val["bed_temperature"], 60)
+        # also from Prusa's official profiles: no Z-hop, no travel ramping, pressure advance off, 4 mm3/s
+        self.assertEqual((val["retract_lift"], val["travel_ramping_lift"]), (0, 0))
+        self.assertEqual(val["pressure_advance_value"], 0)
+        self.assertEqual(val["filament_max_volumetric_speed"], 4)
+        self.assertEqual(val["filament_density"], 1.18)
 
     def test_name_and_condition(self):
         self.assertEqual(self.v["name"], "Prusament PLA Lightweight 240C EM0.37")
@@ -90,7 +97,7 @@ class ProfileYaml(unittest.TestCase):
     def test_same_keys_as_the_users_own_saved_preset(self):
         """The preset the slicer itself saved has these value keys; ours must be a superset of the
         keys a UI-saved LW preset touches (EM, first layer temperature, fans)."""
-        for k in ("extrusion_multiplier", "first_layer_temperature", "max_fan_speed", "min_fan_speed"):
+        for k in ("extrusion_multiplier", "first_layer_temperature", "min_fan_speed"):
             self.assertIn(k, self.v["values"])
 
 
@@ -112,21 +119,22 @@ class Baking(unittest.TestCase):
     def test_tower_values_are_never_overridden_by_stock(self):
         _, t, _ = gen("--temp", "240", "--em", "0.37", "--stock-json", self.FIX)
         v = yaml.safe_load(t)["variants"][0]["values"]
-        self.assertEqual((v["temperature"], v["min_fan_speed"], v["max_fan_speed"]), (240, 30, 30))
+        self.assertEqual((v["temperature"], v["min_fan_speed"]), (240, 30))
         self.assertAlmostEqual(v["extrusion_multiplier"], 0.37)
         self.assertNotIn("temperature", [k for k in mp.BAKE_KEYS])
 
-    def test_speed_cap_default_overrides_stock_and_speed_zero_keeps_it(self):
-        _, t, _ = gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX)
-        self.assertAlmostEqual(yaml.safe_load(t)["variants"][0]["values"]["filament_max_volumetric_speed"], 4.07)
-        _, t, _ = gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX, "--speed", "0")
-        self.assertEqual(yaml.safe_load(t)["variants"][0]["values"]["filament_max_volumetric_speed"], 24)
+    def test_speed_cap_defaults_to_prusas_4_overrides_stock_and_speed_zero_keeps_it(self):
+        vol = lambda *a: yaml.safe_load(gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX, *a)[1])["variants"][0]["values"]["filament_max_volumetric_speed"]
+        self.assertEqual(vol(), 4)                              # Prusa's value in every official Lightweight profile
+        self.assertAlmostEqual(vol("--speed", "50"), 4.07)
+        self.assertEqual(vol("--speed", "0"), 24)               # the stock (high-flow) limit survives
+        self.assertEqual(vol("--max-volumetric-speed", "6", "--speed", "50"), 6)
 
-    def test_pressure_advance_option_beats_the_baked_stock_value(self):
-        _, t, _ = gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX)
-        self.assertEqual(yaml.safe_load(t)["variants"][0]["values"]["pressure_advance_value"], 0.036)
-        _, t, _ = gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX, "--pressure-advance", "0.01")
-        self.assertEqual(yaml.safe_load(t)["variants"][0]["values"]["pressure_advance_value"], 0.01)
+    def test_pressure_advance_is_off_by_default_like_prusa_and_can_be_changed_or_kept(self):
+        pa = lambda *a: yaml.safe_load(gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX, *a)[1])["variants"][0]["values"]["pressure_advance_value"]
+        self.assertEqual(pa(), 0)                               # Prusa sends M572 S0 for Lightweight PLA on every printer
+        self.assertEqual(pa("--pressure-advance", "0.01"), 0.01)
+        self.assertEqual(pa("--keep-pressure-advance"), 0.036)  # the stock value survives
 
     def test_without_stock_json_nothing_is_baked(self):
         _, t, _ = gen("--temp", "240", "--em", "0.37")
@@ -138,6 +146,26 @@ class Baking(unittest.TestCase):
         self.assertEqual(mp.bake_value([24.0]), 24.0)
         self.assertIsNone(mp.bake_value([]))
         self.assertIsNone(mp.bake_value(None))
+
+
+@unittest.skipIf(yaml is None, "PyYAML not installed")
+class OfficialAlignment(unittest.TestCase):
+    """Values taken from Prusa's own Prusament PLA Lightweight profiles (PrusaSlicer-settings-prusa-fff, config 2.5.16)."""
+    def vals(self, *argv):
+        return yaml.safe_load(gen("--temp", "230", "--em", "0.45", *argv)[1])["variants"][0]["values"]
+
+    def test_keep_retraction_matches_the_shipped_profile(self):
+        v = self.vals("--keep-retraction")
+        for k in ("retract_length", "retract_before_wipe", "wipe"):
+            self.assertNotIn(k, v)
+        self.assertEqual(v["retract_lift"], 0)                  # Prusa still removes the Z-hop
+
+    def test_fan_is_adjustable_per_printer(self):
+        self.assertEqual(self.vals("--fan", "45")["min_fan_speed"], 45)   # Prusa: MK4 / MK3.9
+        self.assertEqual(self.vals("--fan", "50")["min_fan_speed"], 50)   # Prusa: XL 0.4 HF
+
+    def test_default_curve_point_is_prusas_default_profile(self):
+        self.assertAlmostEqual(self.vals()["extrusion_multiplier"], 0.45)  # 230 C / 0.45 is also Prusa's EM
 
 
 class Speed(unittest.TestCase):

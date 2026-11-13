@@ -74,16 +74,21 @@ python3 tools/make_profile.py --temp 240 --em 0.37 \
   Omit them to cover every nozzle (then the baked values only match the nozzle used in step 3, so prefer being
   specific).
 - Defaults you may change on request: `--name`, `--first-layer-temp` (default = `--temp`), `--bed 60`,
-  `--fan 30`, `--bridge-fan 100`, `--slowdown 0`, `--retract 0`, `--speed 50`.
-- `--speed` (mm/s, default 50, max 100, 0 = keep the stock limit) is applied as the filament's **maximum volumetric
-  speed** (50 mm/s is about 4.07 mm³/s for 0.2 mm layers and 0.45 mm lines). Verified in real G-code: it takes
-  perimeters from 150-200 mm/s down to about 50, which matches the tower (printed at about 50 mm/s). Do not drop it:
-  foaming depends on speed, so a multiplier measured at 50 mm/s is not valid at 150-200.
-- `--pressure-advance <value>` is optional. By default the stock preset's value is kept (CORE One: 0.036). Foaming
-  filament is compressible, so only change it when the user asks or wants to experiment; it reaches the G-code as
-  `M572 S<value>`.
-- The preset name defaults to `Prusament PLA Lightweight <T>C EM<em>`. Ids are derived from the name, so
-  re-running with the same name overwrites the same preset instead of making a duplicate.
+  `--fan`, `--bridge-fan 100`, `--slowdown 0`, `--retract 0`, `--speed`, `--pressure-advance`.
+- These defaults were **cross-checked against Prusa's own official Lightweight profile** (see
+  `docs/PRUSA-OFFICIAL-PROFILE.md`): auto-cooling off, fan = `min_fan_speed`, max volumetric speed 4 mm³/s, pressure
+  advance off, no Z-hop, no travel Z-ramping. Do not undo them without a reason.
+- `--fan` default is 30, Prusa's value for CORE One, MK4S and XL+. Prusa uses **45** for MK4 / MK3.9 and **50** for the XL
+  0.4 HF: pass `--fan 45` / `--fan 50` for those printers (run `tools/official_lw.py --list` to see every variant).
+- Speed: the default is Prusa's own limit, `filament_max_volumetric_speed` = **4 mm³/s** (about 49 mm/s at 0.2 mm
+  layers). `--speed N` converts N mm/s to a volumetric limit instead (50 mm/s = 4.07); `--speed 0` keeps the stock
+  limit; `--max-volumetric-speed X` sets it directly. Verified in real G-code (perimeters 150-200 mm/s → about 49).
+  Do not drop the cap: foaming depends on speed, so a multiplier measured at about 50 mm/s is not valid at 150-200.
+- Pressure advance: the default is **off** (value 0), as in Prusa's profiles (`M572 S0`). `--pressure-advance X` sets a
+  value; `--keep-pressure-advance` keeps the stock one (CORE One: 0.036).
+- Retraction: the default is **off** (blog and Knowledge Base), but Prusa's *shipped* profile does not override the
+  retraction length. This is an **open question**; tell the user, and pass `--keep-retraction` if they want to match the
+  shipped profile.
 - What it sets: temperature, first layer temperature, EM, bed 60, constant fan 30 % (100 % on bridges, none on
   first layers, no dynamic overhang fans), no layer-time slowdown, retraction off (length 0, no wipe) and the
   datasheet density. Rationale and sources are in `README.md` and `com.community.pla-lw-temp-test/README.md`.
@@ -94,17 +99,26 @@ python3 tools/resolve_stock.py --printer "<printer>" --print "<print profile>" \
   --material "<new preset name>" --with-preset "profiles/<file>.yaml" \
   --diff-against stock.json --out resolved.json
 ```
-The slicer loads the new preset into the throwaway copy and resolves it. The differences from stock must be
-**exactly** these (they are the intended edits; anything else means something was lost or mis-set):
+The slicer loads the new preset into the throwaway copy and resolves it. For the CORE One 0.4 HF the differences from
+stock must be **exactly** these 13 (the intended edits; anything else means something was lost or mis-set):
 
-`enable_dynamic_fan_speeds`, `extrusion_multiplier`, `filament_density`, `filament_max_volumetric_speed`
-(unless `--speed 0`), `filament_notes`, `first_layer_temperature`, `max_fan_speed`, `min_fan_speed`,
-`retract_before_wipe`, `retract_length`, `slowdown_below_layer_time`, `temperature`, `wipe`
-(plus `pressure_advance_value` if `--pressure-advance` was used).
+`cooling`, `extrusion_multiplier`, `filament_density`, `filament_max_volumetric_speed`, `filament_notes`,
+`min_fan_speed`, `pressure_advance_value`, `retract_before_wipe`, `retract_length`, `retract_lift`,
+`slowdown_below_layer_time`, `travel_ramping_lift`, `wipe`
 
-(Bed temperatures only show up if the stock value was not 60.) If the command says the slicer could not resolve
-the profile names, the preset did not load: re-check the `--printers/--nozzle/--high-flow` condition against the
-printer (step 4) and that `--list-materials` shows the new name.
+plus `temperature` and `first_layer_temperature` whenever they differ from the stock's 230 °C. With `--keep-retraction`,
+`retract_length`, `retract_before_wipe` and `wipe` are absent. If the command says the slicer could not resolve the
+profile names, the preset did not load: re-check the `--printers/--nozzle/--high-flow` condition against the printer
+(step 4) and that `--list-materials` shows the new name.
+
+### 5a. Compare with Prusa's official profile (recommended)
+```bash
+python3 tools/official_lw.py --variant "COREONE HF0.4" --compare "profiles/<file>.yaml"
+```
+It downloads Prusa's official Lightweight profile (needs network) and compares the key settings. Expect everything to
+match except `slowdown_below_layer_time` (Prusa 8, ours 0; inactive because auto-cooling is off) and the retraction
+length (Prusa does not override it). If something else differs, explain why or fix it. Variants are named like
+`COREONE HF0.4`, `MK4S`, `XL+ HF0.4` (see `--list`).
 
 ### 5b. Check the real G-code (recommended)
 ```bash
@@ -141,17 +155,19 @@ been test-printed unless the user says so.
 | `tools/make_profile.py` | preset generator (stdlib only) |
 | `tools/resolve_stock.py` | asks the slicer for resolved values; verifies presets |
 | `tools/check_gcode.py` | slices a test model with stock vs new preset and compares the G-code |
+| `tools/official_lw.py` | reads Prusa's official Lightweight profiles from their GitHub and compares a preset with them |
 | `tools/analyze_results.py` | caliper readings in, extrusion multiplier per band out; flags bad bands |
 | `tools/lwcurve.py` | the flow curve, limits (190/210/240/250 °C) and zones, read from the plugin source |
 | `tools/make_diagrams.py` | regenerates `docs/images/*.svg` from the plugin's numbers |
-| `tests/` | `luajit tests/plugin_test.lua`; `python3 -I tests/profile_test.py`; `python3 -I tests/resolve_test.py`; `python3 -I tests/analyze_test.py`; `python3 -I tests/gcode_test.py` |
+| `tests/` | `luajit tests/plugin_test.lua`; `python3 -I tests/profile_test.py`; `python3 -I tests/resolve_test.py`; `python3 -I tests/analyze_test.py`; `python3 -I tests/gcode_test.py`; `python3 -I tests/official_test.py` |
 
 ## Sources
-Official Prusa documentation is linked (not copied) in `docs/REFERENCES.md`. Cite it, and when a number is not in
+Official Prusa documentation is linked (not copied) in `docs/REFERENCES.md`; the comparison with Prusa's shipped profile
+is in `docs/PRUSA-OFFICIAL-PROFILE.md`. Cite it, and when a number is not in
 Prusa's material, say it is measured or assumed (the REFERENCES page lists which).
 
 ## Working on the code
-- Run all five test files after any change. The Lua test uses a mock of the slicer API: it cannot prove the plugin
+- Run all six test files after any change. The Lua test uses a mock of the slicer API: it cannot prove the plugin
   works inside PrusaSlicer. Say so rather than implying it does.
 - The flow curve (`EM_CURVE`, `EM_FLOOR` in the plugin) is built from Prusa's published numbers
   (datasheet 1.0 @ 215 °C and 0.38 @ 235 °C; blog 0.45 @ 230 °C). Do not change it without a source, and re-run

@@ -46,6 +46,7 @@ BAKE_KEYS = [
     "pressure_advance_value",
 ]
 
+PRUSA_MAX_VOLUMETRIC = 4.0   # mm^3/s: filament_max_volumetric_speed in every official Lightweight profile
 MAX_TEMP = lwcurve.MAX_SAFE_TEMP  # Prusa: never above 250 C with this filament (toxic fumes)
 MIN_TEMP = lwcurve.MIN_TEMP
 
@@ -152,7 +153,7 @@ def make_preset(args):
                 "%s %d C is outside the usable range %d-%d C found in the test print (%s)" % (
                     label, t, lwcurve.TEMP_OK_MIN, lwcurve.TEMP_OK_MAX,
                     "too cold: the filament will not foam" if t < lwcurve.TEMP_OK_MIN else "too hot: the surface degrades; never exceed %d C" % lwcurve.MAX_SAFE_TEMP)]
-    if args.speed < 0 or args.speed > 100:
+    if args.speed is not None and (args.speed < 0 or args.speed > 100):
         raise ValueError("--speed must be 0-100 mm/s (datasheet: up to 100; 0 = do not limit the speed)")
     for label, val in (("--fan", args.fan), ("--bridge-fan", args.bridge_fan)):
         if not (0 <= val <= 100):
@@ -172,34 +173,39 @@ def make_preset(args):
         # bed (datasheet: 60 +/- 10 C)
         "bed_temperature": args.bed,
         "first_layer_bed_temperature": args.bed,
-        # cooling: constant fan (min = max), strong fan only on bridges, no fan on first layers,
-        # no CORE One dynamic overhang fans, no layer-time slowdown (speed also drives foaming)
-        "cooling": 1,
+        # cooling, as in Prusa's own Lightweight profiles: automatic cooling OFF, so the fan simply runs at
+        # min_fan_speed (30 on CORE One / MK4S / XL+, 45-50 on some other printers), 100 % on bridges and (stock
+        # dynamic overhang fans) on overhangs, none on the first layers; no layer-time slowdown
+        "cooling": 0,
         "fan_always_on": 1,
         "min_fan_speed": args.fan,
-        "max_fan_speed": args.fan,
         "bridge_fan_speed": args.bridge_fan,
-        "enable_dynamic_fan_speeds": 0,
         "disable_fan_first_layers": 1,
         "full_fan_speed_layer": 3,
         "slowdown_below_layer_time": args.slowdown,
-        # retraction does not work with foaming filament (Prusa): off, no wipe
-        "retract_length": args.retract,
-        "retract_before_wipe": "0%",
-        "wipe": 0,
+        # no Z-hop and no travel Z-ramping, as in Prusa's profiles
+        "retract_lift": 0,
+        "travel_ramping_lift": 0,
+        # retraction does not work well with foaming filament (Prusa blog and Knowledge Base)
+        # NOTE: Prusa's shipped profile does not override the retraction length; see --keep-retraction
+        **({} if args.keep_retraction else {"retract_length": args.retract, "retract_before_wipe": "0%", "wipe": 0}),
         # datasheet density of the unfoamed filament
         "filament_density": 1.18,
         "filament_notes": "Made with Prusament-PLA-Lightweight-Test-Tower: %d C, extrusion multiplier %s" % (temp, format_number(em)),
     }
 
-    if args.pressure_advance is not None:
+    # Prusa's Lightweight profiles switch pressure advance off ("M572 S0") on every printer
+    if not args.keep_pressure_advance:
         if not (0 <= args.pressure_advance <= 1):
             raise ValueError("--pressure-advance must be between 0 and 1")
         values["pressure_advance_value"] = args.pressure_advance
 
-    if args.speed:
-        values["filament_max_volumetric_speed"] = (args.max_volumetric_speed if args.max_volumetric_speed
-                                                   else volumetric_limit(args.speed))
+    if args.max_volumetric_speed is not None:
+        values["filament_max_volumetric_speed"] = args.max_volumetric_speed
+    elif args.speed is None:
+        values["filament_max_volumetric_speed"] = PRUSA_MAX_VOLUMETRIC   # Prusa's own value
+    elif args.speed:
+        values["filament_max_volumetric_speed"] = volumetric_limit(args.speed)
 
     baked = []
     if getattr(args, "stock_json", None):
@@ -271,14 +277,18 @@ def main(argv=None):
     ap.add_argument("--name", help="preset name (default: Prusament PLA Lightweight <temp>C EM<em>)")
     ap.add_argument("--first-layer-temp", type=float, help="first layer temperature (default: same as --temp)")
     ap.add_argument("--bed", type=int, default=60, help="bed temperature (default 60)")
-    ap.add_argument("--fan", type=int, default=30, help="constant fan speed %% (datasheet 30)")
+    ap.add_argument("--fan", type=int, default=30, help="fan speed %% (default 30: Prusa's value for CORE One, MK4S and XL+; their MK4/MK3.9 "
+                    "profile uses 45 and XL 0.4 HF uses 50)")
     ap.add_argument("--bridge-fan", type=int, default=100, help="fan %% on bridges (datasheet 100)")
     ap.add_argument("--slowdown", type=int, default=0, help="slowdown_below_layer_time in s (default 0 = off)")
-    ap.add_argument("--speed", type=float, default=50, help="target print speed in mm/s, applied as a maximum volumetric speed "
-                    "(default 50; datasheet: up to 100; 0 = leave the stock limit)")
+    ap.add_argument("--speed", type=float, default=None, help="target print speed in mm/s, applied as a maximum volumetric speed. "
+                    "Default: Prusa's own limit of 4 mm3/s (about 49 mm/s at 0.2 mm layers); datasheet: up to 100; 0 = leave the stock limit")
     ap.add_argument("--max-volumetric-speed", type=float, help="set the limit in mm^3/s directly (overrides --speed)")
-    ap.add_argument("--pressure-advance", type=float, help="pressure advance value; default: keep the stock preset's value. "
-                    "Foaming filament is compressible, so some users lower it (0 switches the value off)")
+    ap.add_argument("--pressure-advance", type=float, default=0.0, help="pressure advance value (default 0: off, as in all of Prusa's "
+                    "Lightweight profiles, which send M572 S0)")
+    ap.add_argument("--keep-pressure-advance", action="store_true", help="keep the stock preset's pressure advance instead")
+    ap.add_argument("--keep-retraction", action="store_true", help="do not override retraction (this is what Prusa's shipped profile does; "
+                    "the default here is retraction off, as in Prusa's blog post and Knowledge Base)")
     ap.add_argument("--retract", type=float, default=0, help="retraction length in mm (default 0 = off)")
     ap.add_argument("--parent", default=PARENT_DEFAULT, help="preset to inherit from (default 'Prusament PLA')")
     ap.add_argument("--printers", default=PRINTERS_DEFAULT, help="printer base_model regex alternatives, '|' separated")
