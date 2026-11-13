@@ -7,6 +7,11 @@ This repo has two halves:
 2. **`tools/`** turns the result into a PrusaSlicer 3 **filament preset**. That is the job you will usually be
    asked to do.
 
+## Scope (say this to users when relevant)
+This project is **only for PrusaSlicer 3.0 while it is in alpha**, which has no Prusament PLA Lightweight profile by
+default. It does not work with PrusaSlicer 2.x (no plugins there). Once Prusa ships an official profile for
+PrusaSlicer 3, recommend that instead. It is a community project, not affiliated with or supported by Prusa Research.
+
 ## The main request: "make a Lightweight PLA profile for PrusaSlicer 3 with the 240 °C / 0.37 combo"
 
 The user read a label off the printed tower (`temperature / extrusion multiplier`, e.g. `240 / 0.37`) or measured
@@ -69,7 +74,14 @@ python3 tools/make_profile.py --temp 240 --em 0.37 \
   Omit them to cover every nozzle (then the baked values only match the nozzle used in step 3, so prefer being
   specific).
 - Defaults you may change on request: `--name`, `--first-layer-temp` (default = `--temp`), `--bed 60`,
-  `--fan 30`, `--bridge-fan 100`, `--slowdown 0`, `--retract 0`.
+  `--fan 30`, `--bridge-fan 100`, `--slowdown 0`, `--retract 0`, `--speed 50`.
+- `--speed` (mm/s, default 50, max 100, 0 = keep the stock limit) is applied as the filament's **maximum volumetric
+  speed** (50 mm/s is about 4.07 mm³/s for 0.2 mm layers and 0.45 mm lines). Verified in real G-code: it takes
+  perimeters from 150-200 mm/s down to about 50, which matches the tower (printed at about 50 mm/s). Do not drop it:
+  foaming depends on speed, so a multiplier measured at 50 mm/s is not valid at 150-200.
+- `--pressure-advance <value>` is optional. By default the stock preset's value is kept (CORE One: 0.036). Foaming
+  filament is compressible, so only change it when the user asks or wants to experiment; it reaches the G-code as
+  `M572 S<value>`.
 - The preset name defaults to `Prusament PLA Lightweight <T>C EM<em>`. Ids are derived from the name, so
   re-running with the same name overwrites the same preset instead of making a duplicate.
 - What it sets: temperature, first layer temperature, EM, bed 60, constant fan 30 % (100 % on bridges, none on
@@ -85,13 +97,25 @@ python3 tools/resolve_stock.py --printer "<printer>" --print "<print profile>" \
 The slicer loads the new preset into the throwaway copy and resolves it. The differences from stock must be
 **exactly** these (they are the intended edits; anything else means something was lost or mis-set):
 
-`enable_dynamic_fan_speeds`, `extrusion_multiplier`, `filament_density`, `filament_notes`,
-`first_layer_temperature`, `max_fan_speed`, `min_fan_speed`, `retract_before_wipe`, `retract_length`,
-`slowdown_below_layer_time`, `temperature`, `wipe`.
+`enable_dynamic_fan_speeds`, `extrusion_multiplier`, `filament_density`, `filament_max_volumetric_speed`
+(unless `--speed 0`), `filament_notes`, `first_layer_temperature`, `max_fan_speed`, `min_fan_speed`,
+`retract_before_wipe`, `retract_length`, `slowdown_below_layer_time`, `temperature`, `wipe`
+(plus `pressure_advance_value` if `--pressure-advance` was used).
 
 (Bed temperatures only show up if the stock value was not 60.) If the command says the slicer could not resolve
 the profile names, the preset did not load: re-check the `--printers/--nozzle/--high-flow` condition against the
 printer (step 4) and that `--list-materials` shows the new name.
+
+### 5b. Check the real G-code (recommended)
+```bash
+python3 tools/check_gcode.py --printer "<printer>" --print "<print profile>" \
+  --stock "<stock Prusament PLA name>" --material "<new preset name>" --with-preset "profiles/<file>.yaml"
+```
+It slices a two-cube model (travel between the cubes is where retraction happens) with stock PLA and with the new
+preset, on a throwaway copy of the presets, and compares the G-code. Expect: retractions drop to 0, fan about 30 %
+(255 only on bridges), speeds about 50 mm/s, the user's temperature, and the printer's own commands
+(for example CORE One `M142 S36`) unchanged. If retractions are not 0, or speeds are still 150+ mm/s, something
+did not take: tell the user instead of installing.
 
 ### 6. Install (ask first)
 Writing into the user's PrusaSlicer folder is outside this repo, so **ask before doing it**:
@@ -104,8 +128,8 @@ presets.
 
 ### 7. Tell the user what a filament preset cannot do
 Say these in your reply; they live in the print preset or the slicer, not in the filament preset:
-- print speed about 50 mm/s (datasheet: up to 100; faster needs a higher temperature for the same foaming);
-- "Avoid crossing perimeters" (max detour 40 mm) against stringing, one model at a time;
+- "Avoid crossing perimeters" (max detour 40 mm) against stringing, one model at a time; this is a print setting;
+- the printer profile needs no change: the filament preset overrides retraction (verified in G-code);
 - dry the filament 5 h at 55 °C; ventilate (250 °C is Prusa's limit).
 Be honest about status: the preset is verified to **load and resolve correctly in the slicer CLI**, but it has not
 been test-printed unless the user says so.
@@ -116,17 +140,18 @@ been test-printed unless the user says so.
 | `com.community.pla-lw-temp-test/` | the plugin bundle (`manifest.json`, `pla_lw_temp_test.lua`, README) |
 | `tools/make_profile.py` | preset generator (stdlib only) |
 | `tools/resolve_stock.py` | asks the slicer for resolved values; verifies presets |
+| `tools/check_gcode.py` | slices a test model with stock vs new preset and compares the G-code |
 | `tools/analyze_results.py` | caliper readings in, extrusion multiplier per band out; flags bad bands |
 | `tools/lwcurve.py` | the flow curve, limits (190/210/240/250 °C) and zones, read from the plugin source |
 | `tools/make_diagrams.py` | regenerates `docs/images/*.svg` from the plugin's numbers |
-| `tests/` | `luajit tests/plugin_test.lua`; `python3 -I tests/profile_test.py`; `python3 -I tests/resolve_test.py`; `python3 -I tests/analyze_test.py` |
+| `tests/` | `luajit tests/plugin_test.lua`; `python3 -I tests/profile_test.py`; `python3 -I tests/resolve_test.py`; `python3 -I tests/analyze_test.py`; `python3 -I tests/gcode_test.py` |
 
 ## Sources
 Official Prusa documentation is linked (not copied) in `docs/REFERENCES.md`. Cite it, and when a number is not in
 Prusa's material, say it is measured or assumed (the REFERENCES page lists which).
 
 ## Working on the code
-- Run all four test files after any change. The Lua test uses a mock of the slicer API: it cannot prove the plugin
+- Run all five test files after any change. The Lua test uses a mock of the slicer API: it cannot prove the plugin
   works inside PrusaSlicer. Say so rather than implying it does.
 - The flow curve (`EM_CURVE`, `EM_FLOOR` in the plugin) is built from Prusa's published numbers
   (datasheet 1.0 @ 215 °C and 0.38 @ 235 °C; blog 0.45 @ 230 °C). Do not change it without a source, and re-run

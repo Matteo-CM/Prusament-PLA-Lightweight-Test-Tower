@@ -1,5 +1,19 @@
 # PLA Lightweight Temperature Test (PrusaSlicer 3.0 plugin)
 
+> [!CAUTION]
+> **For PrusaSlicer 3.0 only, and only while it is in alpha.** This project exists because the PrusaSlicer 3.0 alpha
+> does **not** come with a Prusament PLA Lightweight profile by default. It is a stop-gap: a plugin that helps you find
+> the right settings, and a generator that builds a profile from them.
+>
+> - **It needs PrusaSlicer 3.0.** Plugins are a PrusaSlicer 3 feature, so none of this works in PrusaSlicer 2.x.
+> - **It was developed and tested on a 3.0 alpha** (alpha 14). The plugin system is experimental and can change between
+>   releases, so this project may stop working at any time.
+> - **Once Prusa ships an official Prusament PLA Lightweight profile for PrusaSlicer 3, use that instead.** Prusa's own
+>   profile is the better choice. The same goes for any PrusaSlicer version that already includes one.
+> - **This is a community project.** It is not made, endorsed or supported by Prusa Research. The settings come from
+>   Prusa's published documentation plus our own test prints. Nothing is guaranteed: use it at your own risk and never
+>   print above 250 °C.
+
 Menu: **Plugins → Calibration → PLA Lightweight Temp Test**
 
 Prusament PLA Lightweight foams in the hot end. Nozzle temperature controls how much it

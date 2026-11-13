@@ -120,6 +120,16 @@ def load_stock(path):
     return data
 
 
+def volumetric_limit(speed, layer_height=0.2, line_width=0.45):
+    """mm^3/s that corresponds to `speed` mm/s for a line of that width and height.
+
+    Foaming depends on how long the filament sits in the hot end, i.e. on the volume pushed through per
+    second, so the filament-level 'maximum volumetric speed' is the right control: the slicer slows any
+    feature that would exceed it. Cross-section as PrusaSlicer models it (rounded rectangle)."""
+    area = (line_width - layer_height) * layer_height + 3.141592653589793 * (layer_height / 2.0) ** 2
+    return round(speed * area, 2)
+
+
 def safe_name(name):
     name = re.sub(r"[^A-Za-z0-9 ._+-]", "", name).strip()
     return re.sub(r"\s+", " ", name)
@@ -142,6 +152,8 @@ def make_preset(args):
                 "%s %d C is outside the usable range %d-%d C found in the test print (%s)" % (
                     label, t, lwcurve.TEMP_OK_MIN, lwcurve.TEMP_OK_MAX,
                     "too cold: the filament will not foam" if t < lwcurve.TEMP_OK_MIN else "too hot: the surface degrades; never exceed %d C" % lwcurve.MAX_SAFE_TEMP)]
+    if args.speed < 0 or args.speed > 100:
+        raise ValueError("--speed must be 0-100 mm/s (datasheet: up to 100; 0 = do not limit the speed)")
     for label, val in (("--fan", args.fan), ("--bridge-fan", args.bridge_fan)):
         if not (0 <= val <= 100):
             raise ValueError("%s must be 0-100 %%" % label)
@@ -179,6 +191,15 @@ def make_preset(args):
         "filament_density": 1.18,
         "filament_notes": "Made with Prusament-PLA-Lightweight-Test-Tower: %d C, extrusion multiplier %s" % (temp, format_number(em)),
     }
+
+    if args.pressure_advance is not None:
+        if not (0 <= args.pressure_advance <= 1):
+            raise ValueError("--pressure-advance must be between 0 and 1")
+        values["pressure_advance_value"] = args.pressure_advance
+
+    if args.speed:
+        values["filament_max_volumetric_speed"] = (args.max_volumetric_speed if args.max_volumetric_speed
+                                                   else volumetric_limit(args.speed))
 
     baked = []
     if getattr(args, "stock_json", None):
@@ -253,6 +274,11 @@ def main(argv=None):
     ap.add_argument("--fan", type=int, default=30, help="constant fan speed %% (datasheet 30)")
     ap.add_argument("--bridge-fan", type=int, default=100, help="fan %% on bridges (datasheet 100)")
     ap.add_argument("--slowdown", type=int, default=0, help="slowdown_below_layer_time in s (default 0 = off)")
+    ap.add_argument("--speed", type=float, default=50, help="target print speed in mm/s, applied as a maximum volumetric speed "
+                    "(default 50; datasheet: up to 100; 0 = leave the stock limit)")
+    ap.add_argument("--max-volumetric-speed", type=float, help="set the limit in mm^3/s directly (overrides --speed)")
+    ap.add_argument("--pressure-advance", type=float, help="pressure advance value; default: keep the stock preset's value. "
+                    "Foaming filament is compressible, so some users lower it (0 switches the value off)")
     ap.add_argument("--retract", type=float, default=0, help="retraction length in mm (default 0 = off)")
     ap.add_argument("--parent", default=PARENT_DEFAULT, help="preset to inherit from (default 'Prusament PLA')")
     ap.add_argument("--printers", default=PRINTERS_DEFAULT, help="printer base_model regex alternatives, '|' separated")

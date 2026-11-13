@@ -18,6 +18,20 @@
 
 </div>
 
+> [!CAUTION]
+> **For PrusaSlicer 3.0 only, and only while it is in alpha.** This project exists because the PrusaSlicer 3.0 alpha
+> does **not** come with a Prusament PLA Lightweight profile by default. It is a stop-gap: a plugin that helps you find
+> the right settings, and a generator that builds a profile from them.
+>
+> - **It needs PrusaSlicer 3.0.** Plugins are a PrusaSlicer 3 feature, so none of this works in PrusaSlicer 2.x.
+> - **It was developed and tested on a 3.0 alpha** (alpha 14). The plugin system is experimental and can change between
+>   releases, so this project may stop working at any time.
+> - **Once Prusa ships an official Prusament PLA Lightweight profile for PrusaSlicer 3, use that instead.** Prusa's own
+>   profile is the better choice. The same goes for any PrusaSlicer version that already includes one.
+> - **This is a community project.** It is not made, endorsed or supported by Prusa Research. The settings come from
+>   Prusa's published documentation plus our own test prints. Nothing is guaranteed: use it at your own risk and never
+>   print above 250 °C.
+
 ---
 
 ## What is this?
@@ -118,8 +132,9 @@ Open this repository in [Claude Code](https://claude.com/claude-code) and ask, i
 Claude finds your printer's Prusament PLA profile, builds the new one, **checks it against the real slicer**, and
 asks before installing it. Restart PrusaSlicer 3 and pick the new filament.
 
-Also use a print speed of about **50 mm/s** and "Avoid crossing perimeters" (maximum detour 40 mm) with it. A
-filament profile cannot hold those.
+The new profile already handles temperature, flow, fan, retraction and speed (about **50 mm/s**). The one thing a
+filament profile cannot hold is **"Avoid crossing perimeters"** (maximum detour 40 mm, Prusa's tip against stringing).
+Turn it on in your print settings, and print one model at a time.
 
 ---
 
@@ -184,6 +199,39 @@ retraction off. The full table and a pre-print checklist are in the
 </details>
 
 <details>
+<summary><b>What the generated profile changes (checked in real G-code)</b></summary>
+
+<br>
+
+We sliced the same test model with stock Prusament PLA and with a generated profile (CORE One, 0.4 HF nozzle) and
+compared the G-code the printer would receive:
+
+| Setting | Stock Prusament PLA | Generated profile |
+|---|---|---|
+| Retractions | 405 retractions of 0.7 mm | **0** |
+| Fan | 85-100 % (plus dynamic overhang fans) | **30 %**, 100 % on bridges, ramping up over the first layers |
+| Print speed | perimeters 150 mm/s, outer 200 mm/s | **about 50 mm/s** (bridges slower) |
+| Extrusion multiplier | 1.0 | **your value** (0.43 in this run) |
+| Temperature | 230 °C | **your value** |
+| Layer-time slowdown | on | off |
+| CORE One heatbreak command (`M142 S36`) | yes | **kept** |
+| Pressure advance (`M572 S0.036`) | yes | kept (see below) |
+
+The **printer profile needs no change**: the filament profile overrides retraction, so the printer's own retraction
+setting is never used. Speed is controlled with the filament's *maximum volumetric speed* (how much plastic per second
+may be pushed through the nozzle), the right control for a foaming filament because foaming depends on how long the
+plastic sits in the hot end. It matches the tower, which was printed at about 50 mm/s.
+
+**Pressure advance** is left at your printer's stock value. Foaming filament is compressible, so some people lower it. To
+try that: `--pressure-advance 0.01` (verified to reach the G-code).
+
+**Still manual:** "Avoid crossing perimeters" (a print setting) and drying the filament.
+
+Reproduce the comparison with `python3 tools/check_gcode.py` (see `CLAUDE.md`).
+
+</details>
+
+<details>
 <summary><b>The numbers, step by step (for experts)</b></summary>
 
 <br>
@@ -223,6 +271,7 @@ python3 tools/make_profile.py --temp 230 --em 0.43 --printers COREONE --nozzle 0
 | Tower printed: 205 °C too cold, 210-240 °C usable, 245-250 °C too hot | ✅ first print, one printer, one spool |
 | Plugin maths, G-code order and formatting | ✅ mock-API tests (`luajit tests/plugin_test.lua`) |
 | Generated preset loads and resolves correctly in the slicer | ✅ checked with the slicer CLI |
+| Generated preset in real sliced G-code: retractions 405 → 0, fan 30 %, speed about 50 mm/s | ✅ `tools/check_gcode.py` |
 | Larger labels, band grooves, COLD/HOT tags, refusal plate, `M117` messages | ⏳ added after the first print, not yet seen in the slicer |
 | Walls measured and a generated profile test-printed | ⏳ in progress |
 | Fan, retraction and first-layer settings written by the plugin | ⚠️ the plugin API silently ignores some setting types, so the plugin reads them back; see the checklist in the plugin README |
@@ -253,13 +302,14 @@ luajit tests/plugin_test.lua          # plugin logic against a mock of the slice
 python3 -I tests/profile_test.py      # preset generator (PyYAML optional, used for stricter checks)
 python3 -I tests/resolve_test.py      # helper functions
 python3 -I tests/analyze_test.py      # results analyzer and shared limits
+python3 -I tests/gcode_test.py        # G-code comparison parser
 python3 tools/make_diagrams.py        # regenerate docs/images/*.svg from the plugin's numbers
 ```
 
 | Path | What |
 |---|---|
 | `com.community.pla-lw-temp-test/` | the plugin ([README](com.community.pla-lw-temp-test/README.md)) |
-| `tools/` | analyzer, profile generator, slicer helper, diagram generator |
+| `tools/` | analyzer, profile generator, slicer helper, G-code check, diagram generator |
 | `CLAUDE.md` | step-by-step instructions Claude follows to make and verify a profile |
 | `docs/REFERENCES.md` | every Prusa link and what it was used for |
 

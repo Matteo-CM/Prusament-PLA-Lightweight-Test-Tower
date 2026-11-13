@@ -104,7 +104,6 @@ class Baking(unittest.TestCase):
         _, t, _ = gen("--temp", "240", "--em", "0.37", "--stock-json", self.FIX, "--printers", "COREONE", "--nozzle", "0.4", "--high-flow")
         v = yaml.safe_load(t)["variants"][0]["values"]
         self.assertEqual(v["start_filament_gcode"], "M142 S36 ; set heatbreak target temp")
-        self.assertEqual(v["filament_max_volumetric_speed"], 24)
         self.assertEqual(v["min_print_speed"], 20)
         self.assertEqual(v["filament_purge_multiplier"], "81.25%")
         self.assertEqual(v["filament_infill_max_crossing_speed"], 200)
@@ -117,6 +116,18 @@ class Baking(unittest.TestCase):
         self.assertAlmostEqual(v["extrusion_multiplier"], 0.37)
         self.assertNotIn("temperature", [k for k in mp.BAKE_KEYS])
 
+    def test_speed_cap_default_overrides_stock_and_speed_zero_keeps_it(self):
+        _, t, _ = gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX)
+        self.assertAlmostEqual(yaml.safe_load(t)["variants"][0]["values"]["filament_max_volumetric_speed"], 4.07)
+        _, t, _ = gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX, "--speed", "0")
+        self.assertEqual(yaml.safe_load(t)["variants"][0]["values"]["filament_max_volumetric_speed"], 24)
+
+    def test_pressure_advance_option_beats_the_baked_stock_value(self):
+        _, t, _ = gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX)
+        self.assertEqual(yaml.safe_load(t)["variants"][0]["values"]["pressure_advance_value"], 0.036)
+        _, t, _ = gen("--temp", "230", "--em", "0.43", "--stock-json", self.FIX, "--pressure-advance", "0.01")
+        self.assertEqual(yaml.safe_load(t)["variants"][0]["values"]["pressure_advance_value"], 0.01)
+
     def test_without_stock_json_nothing_is_baked(self):
         _, t, _ = gen("--temp", "240", "--em", "0.37")
         self.assertNotIn("start_filament_gcode", yaml.safe_load(t)["variants"][0]["values"])
@@ -127,6 +138,23 @@ class Baking(unittest.TestCase):
         self.assertEqual(mp.bake_value([24.0]), 24.0)
         self.assertIsNone(mp.bake_value([]))
         self.assertIsNone(mp.bake_value(None))
+
+
+class Speed(unittest.TestCase):
+    def test_volumetric_limit_matches_what_the_slicer_does(self):
+        # measured in sliced G-code: 4.07 mm3/s gave a 50 mm/s median on 0.2 mm layers, 0.45 mm lines
+        self.assertAlmostEqual(mp.volumetric_limit(50), 4.07, places=2)
+        self.assertAlmostEqual(mp.volumetric_limit(100), 8.14, places=2)
+        self.assertLess(mp.volumetric_limit(30), mp.volumetric_limit(80))
+
+    def test_explicit_volumetric_speed_wins(self):
+        name, t, v = gen("--temp", "230", "--em", "0.43", "--max-volumetric-speed", "6")
+        self.assertEqual(v["filament_max_volumetric_speed"], 6)
+
+    def test_bad_speed_and_pressure_advance_rejected(self):
+        for argv in (["--speed", "150"], ["--speed", "-1"], ["--pressure-advance", "2"]):
+            with self.assertRaises(ValueError, msg=argv):
+                gen("--temp", "230", "--em", "0.43", *argv)
 
 
 class Validation(unittest.TestCase):
