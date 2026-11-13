@@ -121,6 +121,10 @@ been test-printed unless the user says so.
 | `tools/make_diagrams.py` | regenerates `docs/images/*.svg` from the plugin's numbers |
 | `tests/` | `luajit tests/plugin_test.lua`; `python3 -I tests/profile_test.py`; `python3 -I tests/resolve_test.py`; `python3 -I tests/analyze_test.py` |
 
+## Sources
+Official Prusa documentation is linked (not copied) in `docs/REFERENCES.md`. Cite it, and when a number is not in
+Prusa's material, say it is measured or assumed (the REFERENCES page lists which).
+
 ## Working on the code
 - Run all four test files after any change. The Lua test uses a mock of the slicer API: it cannot prove the plugin
   works inside PrusaSlicer. Say so rather than implying it does.

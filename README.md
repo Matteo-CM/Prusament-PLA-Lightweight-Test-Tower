@@ -163,10 +163,12 @@ python3 tools/make_diagrams.py        # regenerate docs/images/*.svg from the pl
 
 ## Sources
 
-- Prusament PLA Lightweight Technical Datasheet v1.0 (Prusa Polymers): nozzle 215 to 250 °C, bed 60 ± 10 °C, up to
-  100 mm/s, fan 30 %; specimens printed at EM 1.0 / 215 °C and 0.38 / 235 °C
-- [Prusa blog: Prusament PLA Lightweight](https://blog.prusa3d.com/prusament-pla-lw-65-lighter-than-regular-pla-perfect-choice-for-aircraft-cosplay-and-more_138059/): 230 °C / EM 0.45, retraction off, foaming 215 to 235 °C, the hollow-cube test
+Everything is linked, with what each page was used for, in **[docs/REFERENCES.md](docs/REFERENCES.md)**. The main ones:
+
+- [Prusa blog: Prusament PLA Lightweight](https://blog.prusa3d.com/prusament-pla-lw-65-lighter-than-regular-pla-perfect-choice-for-aircraft-cosplay-and-more_138059/): 230 °C / EM 0.45, retraction off, foaming 215 to 235 °C, never above 250 °C, the hollow-cube test
 - [Prusa Knowledge Base: LW PLA](https://help.prusa3d.com/article/lw-pla_304914): foaming depends on temperature and speed; EM range 1 to 0.35
-- [PrusaSlicer Plugin API](https://github.com/prusa3d/PrusaSlicer/blob/master/doc/Plugin_API.md)
+- Prusament PLA Lightweight Technical Datasheet v1.0 (Prusa Polymers): 215 to 250 °C, bed 60 ± 10 °C, up to 100 mm/s, fan 30 %; EM 1.0 at 215 °C and 0.38 at 235 °C
+- [PrusaSlicer Plugin API](https://github.com/prusa3d/PrusaSlicer/blob/master/doc/Plugin_API.md) and the [Plugin Marketplace docs](https://plugin-marketplace.prusa3d.com/docs)
+- [Buddy firmware G-codes](https://help.prusa3d.com/article/buddy-firmware-specific-g-code-commands_633112): `M104`, `M221`, `M117`
 
 Not affiliated with Prusa Research. Licensed under AGPL-3.0, see [LICENSE](LICENSE).
