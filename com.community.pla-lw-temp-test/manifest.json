@@ -1,0 +1,11 @@
+{
+  "id": "com.community.pla-lw-temp-test",
+  "name": "PLA Lightweight Temperature Test",
+  "version": "0.1.0",
+  "author": "local",
+  "license": "AGPL-3.0-only",
+  "description": "Temperature + flow test tower for foaming (Lightweight) PLA such as Prusament PLA Lightweight. Single-perimeter box, one band per temperature, with M104 and M221 flow compensation and engraved labels.",
+  "category": "Calibration",
+  "min_slicer_version": "3.0.0-alpha13",
+  "required_apis": { "project.plugin": "1.0.0" }
+}
