@@ -16,6 +16,10 @@
 
 *A real print of the tower on a Prusa CORE One. Each band was printed at a different temperature.*
 
+<img src="docs/images/second-print-closeup.jpg" alt="The finished 210 to 240 degree tower printed in Prusament PLA Lightweight: seven bands, each engraved with its temperature and extrusion multiplier" width="700">
+
+*The default tower (210 to 240 °C), printed on a Prusa CORE One L with the plugin's labels. Every band says which temperature and multiplier it was printed with.*
+
 </div>
 
 > [!CAUTION]
@@ -113,6 +117,15 @@ Download this repository (green **Code** button → *Download ZIP*) and copy the
 <div align="center">
 <img src="docs/images/slicer-preview-annotated.png" alt="PrusaSlicer 3 preview of the default tower: seven bands from 210 to 240 degrees with engraved temperature and multiplier labels and a groove at every band boundary" width="620">
 </div>
+
+**What you should get on the printer** (photos of a real print; the top band was still printing):
+
+<div align="center">
+<img src="docs/images/second-print-views.jpg" alt="Two photos of the printed tower from the front and from the side: seven bands labelled 210/1.00 up to 240/0.37" width="760">
+</div>
+
+Look at each band: the surface should look matte and evenly foamed. A band that looks shiny and dense is too cold; a band
+that looks rough or collapsed is too hot. Then go to step 4.
 
 > [!IMPORTANT]
 > The plugin changes your *active* settings for the test (temperatures, fan, speed, retraction). **Do not save the
