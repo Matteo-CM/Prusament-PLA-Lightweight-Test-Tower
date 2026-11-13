@@ -126,3 +126,6 @@ quality and stringing tell you where to stop. To confirm, re-run with Min = Max 
   slides to Prusa's 0.35 floor at 250 °C; those two ends are assumptions.
 - "5 cm × 3" was read as a 50 × 30 mm footprint (3 cm side walls measured); the 80 mm height is
   10 bands × 8 mm.
+
+## Next: turn the result into a filament profile
+Once you know your temperature and extrusion multiplier, see the [repository README](../README.md#3-let-claude-make-the-profile): Claude (or `tools/make_profile.py`) can generate a PrusaSlicer 3 filament preset for you.

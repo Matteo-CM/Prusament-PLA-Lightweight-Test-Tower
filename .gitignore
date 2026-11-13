@@ -1,0 +1,6 @@
+# generated output
+profiles/
+stock.json
+resolved.json
+__pycache__/
+*.pyc
