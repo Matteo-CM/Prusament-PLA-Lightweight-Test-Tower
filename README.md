@@ -1,128 +1,204 @@
-# LW-PLA-test-tower
+<div align="center">
 
-**Find the right temperature and flow for Lightweight (foaming) PLA, then let Claude turn it into a PrusaSlicer 3 filament profile.**
+# Prusament PLA Lightweight Test Tower
 
-A **PrusaSlicer 3.0 plugin** that prints a 10-band test tower from a **standard PLA profile**, plus tools that
-convert your result into a ready-to-use filament preset.
+### Find the right temperature and flow for **Prusament PLA Lightweight** in PrusaSlicer 3, with one test print
 
-<p align="center">
-  <img src="docs/images/first-print-annotated.jpg" alt="The first printed tower: 205 °C is too cold, 210 to 240 °C is usable, 245 and 250 °C are too hot" width="720">
-</p>
+[![Buy on the Prusa e-shop](https://img.shields.io/badge/Prusa_e--shop-Prusament_PLA_Lightweight-FA6831?style=for-the-badge)](https://www.prusa3d.com/product/prusament-pla-lightweight-galaxy-black-1kg-nfc/)
+&nbsp;
+![PrusaSlicer 3](https://img.shields.io/badge/PrusaSlicer-3.0-blue?style=for-the-badge)
+&nbsp;
+[![License AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-lightgrey?style=for-the-badge)](LICENSE)
 
-> **The first real print** (above, CORE One 0.4 HF) shows what this tower is for: **below 210 °C the filament does
-> not foam, above 240 °C the surface degrades, and 210 to 240 °C is the usable window.** The plugin now defaults to
-> that window, flags anything outside it, and **refuses anything above 250 °C** (toxic fumes).
->
-> **Status: early.** The plugin and the generated profiles are verified (see [below](#what-is-verified-and-what-isnt));
-> please [open an issue](../../issues) with what you see on your printer.
+**[What is this?](#what-is-this)** · **[Get the filament](#get-the-filament)** · **[Quick start](#quick-start-5-steps)** · **[Safety](#safety)** · **[Help](#help)**
 
-<p align="center">
-  <img src="docs/images/workflow.svg" alt="Workflow: print the tower, measure, calculate, ask Claude, print with the new profile" width="900">
-</p>
+<img src="docs/images/first-print-annotated.jpg" alt="The first printed tower: 205 °C is too cold, 210 to 240 °C is usable, 245 and 250 °C are too hot" width="700">
 
-## Why a normal temperature tower fails
+*A real print of the tower on a Prusa CORE One. Each band was printed at a different temperature.*
 
-Lightweight PLA foams in the hot end. **Temperature sets how much it expands** (foaming starts around 215 °C and
-peaks around 235 °C), and expansion changes the width of the extruded line. So the extrusion multiplier is only
-correct at *one* temperature; judging a normal tower by eye is misleading.
+</div>
 
-This tower steps **temperature and flow together**. Every band is printed at a different temperature with the
-multiplier Prusa's own numbers suggest for it, so you can measure each wall and find the multiplier that is
-actually right for your printer at any temperature.
+---
 
-<p align="center">
-  <img src="docs/images/em-curve.svg" alt="Extrusion multiplier against temperature: 1.0 at 215 °C, 0.45 at 230 °C, 0.38 at 235 °C" width="760">
-</p>
+## What is this?
 
-## 1. Print the tower
+**Prusament PLA Lightweight** is a *foaming* filament: it puffs up in the hot nozzle, so prints are up to 65 % lighter.
+That also makes it fussy. **How much it puffs depends on the temperature, and the amount of plastic to push out has to
+change with it.** Get it wrong and you get gaps, blobs or a rough surface.
 
-1. In PrusaSlicer 3 load the standard **Prusament PLA** profile.
-2. Copy the folder [`com.community.pla-lw-temp-test`](com.community.pla-lw-temp-test) into the `lua` folder of your
-   PrusaSlicer 3 data directory (the folder that contains `PrusaSlicer.ini`), then restart PrusaSlicer 3.
+This project gives you a **test tower** (a PrusaSlicer 3 plugin) that prints the filament at several temperatures in one go.
+You look at it, measure it, and then **Claude can turn your result into a ready-made filament profile**.
 
-   | Install | `lua` folder |
-   |---|---|
-   | Flatpak | `~/.var/app/com.prusa3d.PrusaSlicer/config/PrusaSlicer3-dev/lua/` |
-   | Linux | `~/.config/PrusaSlicer3-dev/lua/` |
-   | macOS | `~/Library/Application Support/PrusaSlicer3-dev/lua/` |
-   | Windows | `%APPDATA%\PrusaSlicer3-dev\lua\` |
+<div align="center">
+<img src="docs/images/temperature-ruler.svg" alt="Temperature ruler: below 210 degrees too cold, 210 to 240 usable, above 240 too hot, never above 250" width="860">
+</div>
 
-   Copy the folder, don't symlink it.
-3. Run **Plugins → Calibration → PLA Lightweight Temp Test**, slice, and print. The default is the usable
-   **210-240 °C** range (7 bands). Tick **Wide test** to see both failure ends (205-250 °C, 10 bands) or **Custom
-   range** to choose your own.
-4. **Don't save the edited profile over Prusament PLA.** The plugin edits the *active* presets (unsaved), so save
-   it under a new name or discard the changes afterwards.
+> [!NOTE]
+> **The short answer from the first test print:** use **210 to 240 °C**. Below 210 °C the filament does not foam, and
+> above 240 °C the surface falls apart. Prusa's own default profile is **230 °C**. The tower helps you find the exact
+> temperature and flow for *your* printer and spool.
 
-The plugin converts the standard profile for the test: first layer 215 °C, 30 % fan (100 % on bridges), no
-layer-time slowdown, constant print speed (50 mm/s), bed 60 °C and retraction off, plus per-band `M104`
-(temperature) and `M221` (flow). The full table and a pre-print checklist are in the
-[plugin README](com.community.pla-lw-temp-test/README.md).
+**You need:** a Prusa printer that Prusa lists for this filament (CORE One / One+, CORE One L, MK4S, XL), PrusaSlicer 3,
+a spool of Prusament PLA Lightweight, and a pair of calipers. [Claude Code](https://claude.com/claude-code) is
+optional but makes the last step automatic. *Tested so far on a CORE One with a 0.4 mm high-flow nozzle.*
 
-<p align="center">
-  <img src="docs/images/tower-annotated.png" alt="The wide 205-250 °C tower in PrusaSlicer 3: ten bands, each labelled with temperature and extrusion multiplier" width="560"><br>
-  <em>The wide 205-250 °C test in the PrusaSlicer 3 preview (first version of the labels).</em>
-</p>
+## Get the filament
 
-### Safety and range alerts
+Prusament PLA Lightweight is made by Prusa. Buy it from the Prusa e-shop (prices and stock change, so look on the page):
 
-The plugin cannot pop up a message box (plugin errors only reach the slicer's log), so it warns where you will see it:
-
-| | |
+| Colour | Prusa e-shop |
 |---|---|
-| **Dialog** | the Min / Max labels state the limits: below 210 °C too cold, above 240 °C too hot, **hard limit 250 °C** |
-| **Model** | a band outside 210-240 °C is engraved `COLD` or `HOT`, for example `245/0.36 HOT` |
-| **G-code** | a `; WARNING` comment on that band |
-| **Printer display** | `M117` shows `LW 3/7 220C EM0.82`, or `COLD 205C no foam` / `HOT 245C degrades` |
-| **Above 250 °C** | **refused.** Nothing is changed and a plate reading `NO - ABOVE 250 C = TOXIC FUMES` appears in the plater |
+| Galaxy Black | [Prusament PLA Lightweight Galaxy Black 1 kg](https://www.prusa3d.com/product/prusament-pla-lightweight-galaxy-black-1kg-nfc/) |
+| Natural | [Prusament PLA Lightweight Natural 1 kg](https://www.prusa3d.com/product/prusament-pla-lightweight-natural-1kg-nfc/) |
+| Army Green | [Prusament PLA Lightweight Army Green 1 kg](https://www.prusa3d.com/product/prusament-pla-lightweight-army-green-1kg-nfc/) |
+| Coral Orange | [Prusament PLA Lightweight Coral Orange 1 kg](https://www.prusa3d.com/product/prusament-pla-lightweight-coral-orange-1kg-nfc/) |
+| Chocolate Brown | [Prusament PLA Lightweight Chocolate Brown 1 kg](https://www.prusa3d.com/product/prusament-pla-lightweight/) |
 
-## 2. Measure the walls
+More from Prusa: [Prusa website](https://www.prusa3d.com/) · [Prusament](https://prusament.com/) ·
+[PrusaSlicer](https://www.prusa3d.com/p/prusaslicer/) · [all filaments](https://www.prusa3d.com/category/filament/) ·
+[Prusa's article about this filament](https://blog.prusa3d.com/prusament-pla-lw-65-lighter-than-regular-pla-perfect-choice-for-aircraft-cosplay-and-more_138059/) ·
+[Knowledge Base: LW PLA](https://help.prusa3d.com/article/lw-pla_304914)
 
-Each band is a single wall, so the wall *is* the extruded line. Measure it with calipers on the two **30 mm side
-walls**, in the **upper half of each band** (the lower half is where the nozzle is still changing temperature).
-Average two or three readings.
+---
 
-<p align="center">
-  <img src="docs/images/box-layout.svg" alt="Top view of the 50 by 30 mm test box: measure the left and right side walls, not the rear seam or the front tab" width="520">
-</p>
+## Quick start: 5 steps
 
-The grooves on the front tab mark the band boundaries, so a band is identifiable even where foaming blurs the
-labels. Only the **210-240 °C** bands are worth measuring. The target wall is **0.45 to 0.5 mm** for 1 perimeter
-(about 0.9 mm for 2). Then:
+<div align="center">
+<img src="docs/images/workflow.svg" alt="Workflow: print the tower, measure, calculate, ask Claude, print with the new profile" width="900">
+</div>
 
-```
-EM_needed = EM_band × 0.48 / measured wall
-```
+### 1. Dry the filament
+Prusament PLA Lightweight absorbs moisture. Dry it **5 hours at 55 °C** before printing (Prusa's advice).
 
-*Example:* the 215 °C band (EM 1.00) measures 0.55 mm → 1.00 × 0.48 / 0.55 ≈ **0.87** is the multiplier your
-filament wants at 215 °C. Pick the temperature by looking at everything else too: the palest, lightest band is the
-most foamed, hotter bands string more and are weaker, and above 235 °C there is little extra weight saving.
+### 2. Install the plugin
+Download this repository (green **Code** button → *Download ZIP*) and copy the folder
+**`com.community.pla-lw-temp-test`** into PrusaSlicer 3's `lua` folder, then restart PrusaSlicer 3.
 
-Skip the arithmetic: type your readings in and let the analyzer do it. It knows which multiplier each band was
-printed with, flags bands outside the usable range, and catches measurement slips.
+| Your install | Put the folder in |
+|---|---|
+| Flatpak (Linux) | `~/.var/app/com.prusa3d.PrusaSlicer/config/PrusaSlicer3-dev/lua/` |
+| Linux | `~/.config/PrusaSlicer3-dev/lua/` |
+| macOS | `~/Library/Application Support/PrusaSlicer3-dev/lua/` |
+| Windows | `%APPDATA%\PrusaSlicer3-dev\lua\` |
+
+*Not sure where it is? Look for the folder that contains `PrusaSlicer.ini`. Copy the folder, don't link it.*
+
+### 3. Print the tower
+1. Select your printer and the standard **Prusament PLA** profile.
+2. Click **Plugins → Calibration → PLA Lightweight Temp Test**, then **Run**. Keep the defaults for your first try.
+3. Slice and print. It takes about an hour.
+
+> [!IMPORTANT]
+> The plugin changes your *active* settings for the test (temperatures, fan, speed, retraction). **Do not save the
+> profile over Prusament PLA.** Save it under a new name, or discard the changes afterwards.
+
+### 4. Measure the walls
+Every band is a single thin wall, so the wall *is* the plastic line. With calipers, measure the two **30 mm side walls**
+in the **upper half of each band**, and write the numbers down. The tab on the front says which band is which.
+
+<div align="center">
+<img src="docs/images/box-layout.svg" alt="Top view of the 50 by 30 mm test box: measure the left and right side walls, not the rear seam or the front tab" width="480">
+</div>
+
+You want about **0.45 to 0.50 mm**. Type your readings into the analyzer (`temperature=wall`). It tells you how much
+plastic each temperature needs:
 
 ```bash
 python3 tools/analyze_results.py 210=0.62 220=0.55 230=0.50 240=0.47 --pick 230
 ```
 
-## 3. Let Claude make the profile
+*No terminal? Tell Claude your readings and it runs this for you.*
 
-Once you have your combination, open this repo in [Claude Code](https://claude.com/claude-code) (or point Claude at
-it) and ask in plain language:
+### 5. Make your filament profile
+Open this repository in [Claude Code](https://claude.com/claude-code) and ask, in plain language:
 
-> Look at this repo and make me a Lightweight PLA filament profile for PrusaSlicer 3 with the 240 °C / 0.37 combo.
-> I have a Prusa CORE One with a 0.4 high-flow nozzle.
+> *Look at this repo and make me a Lightweight PLA filament profile for PrusaSlicer 3 with the 230 °C / 0.43 combo.
+> I have a Prusa CORE One with a 0.4 high-flow nozzle.*
 
-Claude follows [`CLAUDE.md`](CLAUDE.md): it checks the temperature is in the usable range (never above 250 °C), finds your printer's stock Prusament PLA profile, generates the preset,
-**checks it against the real slicer**, and asks before installing it. You then restart PrusaSlicer 3 and pick the
-new filament.
+Claude finds your printer's Prusament PLA profile, builds the new one, **checks it against the real slicer**, and
+asks before installing it. Restart PrusaSlicer 3 and pick the new filament.
 
-The generated preset inherits from *Prusament PLA* and sets temperature, first-layer temperature, extrusion
-multiplier, bed 60 °C, a constant 30 % fan (100 % on bridges), no layer-time slowdown and retraction off. It also
-copies your printer's own values back in (for example the CORE One heatbreak G-code and high-flow volumetric
-limit), which a plain "inherit from Prusament PLA" would silently lose.
+Also use a print speed of about **50 mm/s** and "Avoid crossing perimeters" (maximum detour 40 mm) with it. A
+filament profile cannot hold those.
 
-You can also run the tools yourself (Python 3.8+, no dependencies):
+---
+
+## Safety
+
+> [!WARNING]
+> **Never print above 250 °C.** Prusa says Prusament PLA Lightweight can give off dangerous fumes above that. The plugin
+> and the tools refuse any temperature above 250 °C. Print in a ventilated room.
+
+The plugin warns you in several places, because a plugin cannot show a pop-up:
+
+| Where | What you see |
+|---|---|
+| The dialog | The Min and Max boxes state the limits |
+| The printed tower | A band outside 210-240 °C is engraved `COLD` or `HOT` |
+| The printer's display | `LW 3/7 220C EM0.82` for a normal band, `HOT 245C degrades` for a flagged one |
+| Above 250 °C | **Refused.** Nothing is changed, and a plate saying `NO - ABOVE 250 C = TOXIC FUMES` appears |
+
+Want to see the bad ends yourself? Tick **Wide test** (205 to 250 °C).
+
+## Help
+
+- Something looks wrong, or you have a photo of your own tower? [Open an issue](../../issues).
+- **Status: early.** The plugin runs in PrusaSlicer 3 and the first tower has been printed. The profile generator is
+  verified against the slicer but not yet test-printed. Details are below.
+
+---
+
+## For the curious
+
+<details>
+<summary><b>Why does the flow have to change with temperature?</b></summary>
+
+<br>
+
+The hotter the nozzle, the more the filament foams, and the fatter the extruded line gets. To keep the same wall width
+you must push out *less* plastic at higher temperatures. The "extrusion multiplier" is that amount: 1.0 is standard PLA.
+Prusa publishes 1.0 at 215 °C, 0.45 at 230 °C and 0.38 at 235 °C. Each band of the tower is printed with the multiplier
+from this curve, so you can measure how far off it is for your printer.
+
+<div align="center">
+<img src="docs/images/em-curve.svg" alt="Extrusion multiplier against temperature: 1.0 at 215 °C, 0.45 at 230 °C, 0.38 at 235 °C" width="760">
+</div>
+
+</details>
+
+<details>
+<summary><b>What the plugin changes for the test</b></summary>
+
+<br>
+
+Starting from the standard Prusament PLA profile, the plugin sets: first layer 215 °C, then a different temperature
+(`M104`) and flow (`M221`) for each band, fan 30 % (100 % on bridges), no layer-time slowdown, 50 mm/s, bed 60 °C and
+retraction off. The full table and a pre-print checklist are in the
+[plugin README](com.community.pla-lw-temp-test/README.md).
+
+<div align="center">
+<img src="docs/images/tower-annotated.png" alt="The wide 205-250 °C tower in PrusaSlicer 3: ten bands, each labelled with temperature and extrusion multiplier" width="520"><br>
+<em>The wide 205-250 °C test in the PrusaSlicer 3 preview (first version of the labels).</em>
+</div>
+
+</details>
+
+<details>
+<summary><b>The numbers, step by step (for experts)</b></summary>
+
+<br>
+
+`EM_needed = EM_band × target wall / measured wall`, with a target of 0.48 mm for 1 perimeter (about 0.9 mm for 2).
+Example: the 215 °C band (EM 1.00) measures 0.55 mm, so 1.00 × 0.48 / 0.55 ≈ **0.87**.
+The palest, lightest band is the most foamed, hotter bands string more and are weaker, and above 235 °C there is little
+extra weight saving. Pick the temperature by looking at the print as well as the numbers.
+
+The generated filament preset inherits from *Prusament PLA* and sets temperature, first-layer temperature, extrusion
+multiplier, bed 60 °C, constant 30 % fan, no slowdown and retraction off. It also copies back the printer-specific
+values of the stock profile (for example the CORE One heatbreak G-code and the high-flow volumetric limit), which a plain
+"inherit from Prusament PLA" silently loses.
+
+Run the tools yourself (Python 3.8+, no dependencies):
 
 ```bash
 python3 tools/resolve_stock.py --list-printers
@@ -130,28 +206,47 @@ python3 tools/resolve_stock.py --list-materials "Prusa CORE One & One+ 0.4 HF"
 python3 tools/resolve_stock.py --printer "Prusa CORE One & One+ 0.4 HF" \
     --print "0.20mm BALANCED @COREONE 0.4HF" \
     --material "Prusament PLA @COREONE HF0.4@COREONE 0.4" --out stock.json
-python3 tools/make_profile.py --temp 240 --em 0.37 --printers COREONE --nozzle 0.4 --high-flow \
+python3 tools/make_profile.py --temp 230 --em 0.43 --printers COREONE --nozzle 0.4 --high-flow \
     --stock-json stock.json --out profiles          # add --install to copy it into PrusaSlicer
 ```
 
-A filament preset cannot hold print settings. For printing with it, also use a print speed of about **50 mm/s**,
-"Avoid crossing perimeters" (max detour 40 mm), dry the filament 5 h at 55 °C, and ventilate. **250 °C is Prusa's
-limit** for this filament.
+</details>
 
-## What is verified, and what isn't
+<details>
+<summary><b>What is verified, and what isn't</b></summary>
+
+<br>
 
 | | Status |
 |---|---|
-| Plugin loads and builds the tower in PrusaSlicer 3 alpha | ✅ (screenshot above) |
+| Plugin builds the tower in PrusaSlicer 3 alpha | ✅ |
+| Tower printed: 205 °C too cold, 210-240 °C usable, 245-250 °C too hot | ✅ first print, one printer, one spool |
 | Plugin maths, G-code order and formatting | ✅ mock-API tests (`luajit tests/plugin_test.lua`) |
-| Generated preset loads and resolves correctly in the slicer | ✅ checked against the slicer CLI (`tests/` + `tools/resolve_stock.py`) |
-| Tower printed | ✅ first print: 205 °C too cold, 210-240 °C usable, 245-250 °C too hot (photo above) |
-| Larger labels, band grooves, COLD/HOT tags, refusal plate, `M117` messages | ⏳ added after the first print; not yet seen in the slicer |
-| Walls measured and a profile test-printed | ⏳ in progress |
-| Fan / retraction / first-layer settings written by the plugin | ⚠️ the plugin API silently ignores some setting types, so the plugin reads them back; see the checklist in the [plugin README](com.community.pla-lw-temp-test/README.md) |
-| Flow between Prusa's published points (and the ends, 205 °C and 250 °C) | ⚠️ interpolated or assumed, which is why you measure |
+| Generated preset loads and resolves correctly in the slicer | ✅ checked with the slicer CLI |
+| Larger labels, band grooves, COLD/HOT tags, refusal plate, `M117` messages | ⏳ added after the first print, not yet seen in the slicer |
+| Walls measured and a generated profile test-printed | ⏳ in progress |
+| Fan, retraction and first-layer settings written by the plugin | ⚠️ the plugin API silently ignores some setting types, so the plugin reads them back; see the checklist in the plugin README |
+| Flow between Prusa's published points, and at 205 °C and 250 °C | ⚠️ interpolated or assumed, which is why you measure |
 
-## Tests
+</details>
+
+<details>
+<summary><b>Glossary</b></summary>
+
+<br>
+
+- **Foaming:** the filament expands in the hot nozzle, so the print is full of tiny air bubbles and weighs less.
+- **Extrusion multiplier (EM):** how much plastic the printer pushes out. 1.0 is normal; this filament needs 0.35 to 1.0.
+- **Band:** one temperature section of the tower.
+- **Perimeter:** one line of plastic around the edge of a layer. The test uses a single one, so the wall *is* one line.
+- **Profile (preset):** a saved set of settings in PrusaSlicer.
+
+</details>
+
+<details>
+<summary><b>Tests and repository layout</b></summary>
+
+<br>
 
 ```bash
 luajit tests/plugin_test.lua          # plugin logic against a mock of the slicer API
@@ -161,14 +256,24 @@ python3 -I tests/analyze_test.py      # results analyzer and shared limits
 python3 tools/make_diagrams.py        # regenerate docs/images/*.svg from the plugin's numbers
 ```
 
+| Path | What |
+|---|---|
+| `com.community.pla-lw-temp-test/` | the plugin ([README](com.community.pla-lw-temp-test/README.md)) |
+| `tools/` | analyzer, profile generator, slicer helper, diagram generator |
+| `CLAUDE.md` | step-by-step instructions Claude follows to make and verify a profile |
+| `docs/REFERENCES.md` | every Prusa link and what it was used for |
+
+</details>
+
+---
+
 ## Sources
 
-Everything is linked, with what each page was used for, in **[docs/REFERENCES.md](docs/REFERENCES.md)**. The main ones:
+All Prusa documentation is linked, with what each page was used for, in **[docs/REFERENCES.md](docs/REFERENCES.md)**.
+The main ones: [Prusa's article](https://blog.prusa3d.com/prusament-pla-lw-65-lighter-than-regular-pla-perfect-choice-for-aircraft-cosplay-and-more_138059/),
+[Knowledge Base: LW PLA](https://help.prusa3d.com/article/lw-pla_304914), the Prusament PLA Lightweight Technical
+Datasheet v1.0 (Prusa Polymers), the [PrusaSlicer Plugin API](https://github.com/prusa3d/PrusaSlicer/blob/master/doc/Plugin_API.md)
+and the [Buddy firmware G-codes](https://help.prusa3d.com/article/buddy-firmware-specific-g-code-commands_633112).
 
-- [Prusa blog: Prusament PLA Lightweight](https://blog.prusa3d.com/prusament-pla-lw-65-lighter-than-regular-pla-perfect-choice-for-aircraft-cosplay-and-more_138059/): 230 °C / EM 0.45, retraction off, foaming 215 to 235 °C, never above 250 °C, the hollow-cube test
-- [Prusa Knowledge Base: LW PLA](https://help.prusa3d.com/article/lw-pla_304914): foaming depends on temperature and speed; EM range 1 to 0.35
-- Prusament PLA Lightweight Technical Datasheet v1.0 (Prusa Polymers): 215 to 250 °C, bed 60 ± 10 °C, up to 100 mm/s, fan 30 %; EM 1.0 at 215 °C and 0.38 at 235 °C
-- [PrusaSlicer Plugin API](https://github.com/prusa3d/PrusaSlicer/blob/master/doc/Plugin_API.md) and the [Plugin Marketplace docs](https://plugin-marketplace.prusa3d.com/docs)
-- [Buddy firmware G-codes](https://help.prusa3d.com/article/buddy-firmware-specific-g-code-commands_633112): `M104`, `M221`, `M117`
-
-Not affiliated with Prusa Research. Licensed under AGPL-3.0, see [LICENSE](LICENSE).
+*This is a community project and is **not affiliated with Prusa Research**. Prusa, Prusament and PrusaSlicer are Prusa
+Research trademarks. Licensed under AGPL-3.0, see [LICENSE](LICENSE).*

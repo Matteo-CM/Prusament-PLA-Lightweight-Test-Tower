@@ -3,6 +3,21 @@
 Official Prusa pages this project is built on, with what each one was used for. Links were checked when they were
 added; Prusa may move pages. Nothing from these pages is copied into the repo: it is all linked.
 
+## Buying the filament and Prusa's websites
+
+Prices and stock change, so they are not quoted here. Each colour has its own Prusa e-shop page:
+
+| Colour | Prusa e-shop page |
+|---|---|
+| Galaxy Black | [Prusament PLA Lightweight Galaxy Black 1 kg (NFC)](https://www.prusa3d.com/product/prusament-pla-lightweight-galaxy-black-1kg-nfc/) |
+| Natural | [Prusament PLA Lightweight Natural 1 kg (NFC)](https://www.prusa3d.com/product/prusament-pla-lightweight-natural-1kg-nfc/) |
+| Army Green | [Prusament PLA Lightweight Army Green 1 kg (NFC)](https://www.prusa3d.com/product/prusament-pla-lightweight-army-green-1kg-nfc/) |
+| Coral Orange | [Prusament PLA Lightweight Coral Orange 1 kg (NFC)](https://www.prusa3d.com/product/prusament-pla-lightweight-coral-orange-1kg-nfc/) |
+| Chocolate Brown | [Prusament PLA Lightweight Chocolate Brown 1 kg (NFC)](https://www.prusa3d.com/product/prusament-pla-lightweight/) |
+
+Also: [Prusa website](https://www.prusa3d.com/), [Prusament](https://prusament.com/),
+[PrusaSlicer](https://www.prusa3d.com/p/prusaslicer/) and [all filaments in the e-shop](https://www.prusa3d.com/category/filament/).
+
 ## The filament: Prusament PLA Lightweight
 
 | Source | Used for |

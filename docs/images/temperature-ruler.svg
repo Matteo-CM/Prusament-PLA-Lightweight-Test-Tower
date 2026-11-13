@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 270" width="900" height="270" role="img" aria-label="Temperature ruler: only 210 to 240 degrees is usable, never above 250">
+<rect x="0.5" y="0.5" width="899" height="269" rx="12" fill="#ffffff" stroke="#d0d7de"/>
+<text x="450.0" y="38.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="20" fill="#1f2328" text-anchor="middle" font-weight="700">Which temperature? Only 210-240 °C works</text>
+<rect x="50.0" y="96" width="142.9" height="44" fill="#cfe3ff"/>
+<text x="121.4" y="84.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" fill="#0969da" text-anchor="middle" font-weight="700">TOO COLD</text>
+<text x="121.4" y="192.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#59636e" text-anchor="middle" font-weight="400">dense, not foaming</text>
+<rect x="192.9" y="96" width="428.6" height="44" fill="#c9ecd5"/>
+<text x="407.1" y="84.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" fill="#1a7f37" text-anchor="middle" font-weight="700">USABLE</text>
+<text x="407.1" y="192.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#59636e" text-anchor="middle" font-weight="400">foamed, clean surface</text>
+<rect x="621.4" y="96" width="142.9" height="44" fill="#ffd5d2"/>
+<text x="692.9" y="84.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="14" fill="#cf222e" text-anchor="middle" font-weight="700">TOO HOT</text>
+<text x="692.9" y="192.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#59636e" text-anchor="middle" font-weight="400">surface degrades</text>
+<rect x="764.3" y="96" width="85.7" height="44" fill="#7d1b1b"/>
+<text x="807.1" y="84.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#7d1b1b" text-anchor="middle" font-weight="700">NEVER</text>
+<text x="807.1" y="192.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#59636e" text-anchor="middle" font-weight="400">toxic fumes</text>
+<rect x="50.0" y="96" width="800.0" height="44" fill="none" stroke="#d0d7de"/>
+<line x1="121.4" y1="140" x2="121.4" y2="148" stroke="#59636e"/><text x="121.4" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="400">205</text>
+<line x1="192.9" y1="140" x2="192.9" y2="148" stroke="#59636e"/><text x="192.9" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="600">210</text>
+<line x1="264.3" y1="140" x2="264.3" y2="148" stroke="#59636e"/><text x="264.3" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="400">215</text>
+<line x1="335.7" y1="140" x2="335.7" y2="148" stroke="#59636e"/><text x="335.7" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="600">220</text>
+<line x1="407.1" y1="140" x2="407.1" y2="148" stroke="#59636e"/><text x="407.1" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="400">225</text>
+<line x1="478.6" y1="140" x2="478.6" y2="148" stroke="#59636e"/><text x="478.6" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="600">230</text>
+<line x1="550.0" y1="140" x2="550.0" y2="148" stroke="#59636e"/><text x="550.0" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="400">235</text>
+<line x1="621.4" y1="140" x2="621.4" y2="148" stroke="#59636e"/><text x="621.4" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="600">240</text>
+<line x1="692.9" y1="140" x2="692.9" y2="148" stroke="#59636e"/><text x="692.9" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="400">245</text>
+<line x1="764.3" y1="140" x2="764.3" y2="148" stroke="#59636e"/><text x="764.3" y="166.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="600">250</text>
+<path d="M478.6,98 l-7,-12 l14,0 z" fill="#e8641c"/>
+<text x="478.6" y="123.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="13" fill="#1f2328" text-anchor="middle" font-weight="700">230 °C: Prusa’s default profile</text>
+<text x="450.0" y="256.0" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif" font-size="12" fill="#59636e" text-anchor="middle" font-weight="400">°C on the nozzle. The 210-240 °C window comes from the first test print; 250 °C is Prusa’s hard limit.</text>
+</svg>

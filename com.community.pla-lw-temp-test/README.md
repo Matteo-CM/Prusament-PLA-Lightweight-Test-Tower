@@ -171,4 +171,4 @@ quality and stringing tell you where to stop. To confirm, re-run with Min = Max 
   wide test to check your own setup.
 
 ## Next: turn the result into a filament profile
-Once you know your temperature and extrusion multiplier, see the [repository README](../README.md#3-let-claude-make-the-profile): Claude (or `tools/make_profile.py`) can generate a PrusaSlicer 3 filament preset for you.
+Once you know your temperature and extrusion multiplier, see the [repository README](../README.md#5-make-your-filament-profile): Claude (or `tools/make_profile.py`) can generate a PrusaSlicer 3 filament preset for you.

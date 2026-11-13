@@ -177,7 +177,7 @@ def make_preset(args):
         "wipe": 0,
         # datasheet density of the unfoamed filament
         "filament_density": 1.18,
-        "filament_notes": "Made with LW-PLA-test-tower: %d C, extrusion multiplier %s" % (temp, format_number(em)),
+        "filament_notes": "Made with Prusament-PLA-Lightweight-Test-Tower: %d C, extrusion multiplier %s" % (temp, format_number(em)),
     }
 
     baked = []

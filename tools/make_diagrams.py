@@ -124,9 +124,38 @@ def layout():
     write("box-layout.svg", o)
 
 
+def ruler():
+    """One-glance answer for beginners: which temperatures are usable."""
+    W, H, L, R = 900, 270, 50, 50
+    lo, hi = 200, 256
+    x = lambda t: L + (t - lo) / (hi - lo) * (W - L - R)
+    o = card(W, H, "Temperature ruler: only 210 to 240 degrees is usable, never above 250")
+    o.append(T(W / 2, 38, "Which temperature? Only 210-240 °C works", 20, INK, "middle", "700"))
+    zones = [(lo, lw.TEMP_OK_MIN, "#cfe3ff", "#0969da", "TOO COLD", "dense, not foaming"),
+             (lw.TEMP_OK_MIN, lw.TEMP_OK_MAX, "#c9ecd5", "#1a7f37", "USABLE", "foamed, clean surface"),
+             (lw.TEMP_OK_MAX, lw.MAX_SAFE_TEMP, "#ffd5d2", "#cf222e", "TOO HOT", "surface degrades"),
+             (lw.MAX_SAFE_TEMP, hi, "#7d1b1b", "#7d1b1b", "NEVER", "toxic fumes")]
+    by, bh = 96, 44
+    for z0, z1, fill, ink, name, why in zones:
+        o.append(f'<rect x="{x(z0):.1f}" y="{by}" width="{x(z1) - x(z0):.1f}" height="{bh}" fill="{fill}"/>')
+        cx = (x(z0) + x(z1)) / 2
+        o.append(T(cx, by - 12, name, 14 if name != "NEVER" else 13, ink, "middle", "700"))
+        o.append(T(cx, by + bh + 52, why, 13, MUTED, "middle"))
+    o.append(f'<rect x="{x(lo):.1f}" y="{by}" width="{x(hi) - x(lo):.1f}" height="{bh}" fill="none" stroke="#d0d7de"/>')
+    for t in range(205, 251, 5):
+        o.append(f'<line x1="{x(t):.1f}" y1="{by + bh}" x2="{x(t):.1f}" y2="{by + bh + 8}" stroke="{MUTED}"/>' + T(x(t), by + bh + 26, str(t), 13, INK, "middle", "600" if t % 10 == 0 else "400"))
+    # Prusa's own default profile temperature
+    px = x(230)
+    o.append(f'<path d="M{px:.1f},{by + 2} l-7,-12 l14,0 z" fill="{ORANGE}"/>')
+    o.append(T(px, by + bh / 2 + 5, "230 °C: Prusa’s default profile", 13, INK, "middle", "700"))
+    o.append(T(W / 2, H - 14, "°C on the nozzle. The 210-240 °C window comes from the first test print; 250 °C is Prusa’s hard limit.", 12, MUTED, "middle"))
+    write("temperature-ruler.svg", o)
+
+
 if __name__ == "__main__":
     os.makedirs(OUT, exist_ok=True)
     curve()
     workflow()
     layout()
-    print("wrote 3 diagrams to", OUT)
+    ruler()
+    print("wrote 4 diagrams to", OUT)
